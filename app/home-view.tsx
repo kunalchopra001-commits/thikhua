@@ -255,6 +255,16 @@ export function HomeView({ blocks }: HomeViewProps) {
               </div>
             </section>
 
+            <div className="mb-8 flex flex-col gap-4 rounded border-2 border-rani bg-rani/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="font-bold">{t("homeReportPrompt")}</p>
+              <Link
+                href="/report"
+                className="flex min-h-12 shrink-0 items-center justify-center rounded border-2 border-rani bg-sand px-5 py-3 font-bold text-charcoal ring-2 ring-inset ring-rani focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
+              >
+                {t("startReport")}
+              </Link>
+            </div>
+
             <section aria-labelledby="open-issues">
               <h2 id="open-issues" className="mb-4 text-2xl font-bold text-indigo">
                 {t("openIssues")}

@@ -16,16 +16,25 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="en">
       <body className="bg-sand text-charcoal">
         <header className="bg-indigo text-sand">
-          <div className="mx-auto flex min-h-16 max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-            <Link href="/" className="text-xl font-bold tracking-tight">
+          <div className="mx-auto flex min-h-16 max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <Link href="/" className="shrink-0 text-lg font-bold tracking-tight sm:text-xl">
               {t("siteName")}
             </Link>
-            <Link
-              href="/track"
-              className="rounded border border-sand px-3 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
-            >
-              {t("trackIssue")}
-            </Link>
+            <nav className="flex items-center gap-2">
+              <Link
+                href="/track"
+                className="flex min-h-11 items-center rounded border border-sand px-3 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+              >
+                <span className="sm:hidden">{t("trackIssueShort")}</span>
+                <span className="hidden sm:inline">{t("trackIssue")}</span>
+              </Link>
+              <Link
+                href="/report"
+                className="flex min-h-11 items-center rounded border-2 border-rani bg-sand px-3 py-2 text-sm font-bold text-charcoal ring-2 ring-inset ring-rani focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+              >
+                {t("startReport")}
+              </Link>
+            </nav>
           </div>
         </header>
         <PrototypeBanner />

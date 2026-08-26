@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export type Severity = "S1" | "S2" | "S3" | "S4";
 export type EstimatedScale = "minor" | "major";
+export type IssueStatus = "submitted" | "in_progress" | "overdue" | "unfunded" | "resolved";
 export type ReporterMode = "anonymous" | "named_private" | "named_public";
 export type CaptureProvenance = "live" | "upload";
 export type StatusEventType =
@@ -43,7 +44,7 @@ export type Issue = {
   execution_authority: string;
   funding_pathway: string;
   statutory_limit_days: number;
-  status: string;
+  status: IssueStatus;
   created_at: string;
   resolved_at: string | null;
   resolution_photo_url: string | null;
@@ -104,7 +105,17 @@ export type Database = {
       status_events: TableDefinition<StatusEvent, StatusEventInsert, never>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      reset_seed_data: {
+        Args: {
+          seed_school_ids: string[];
+          seed_issue_ids: string[];
+          seed_report_ids: string[];
+          seed_status_event_ids: string[];
+        };
+        Returns: undefined;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
@@ -169,7 +180,7 @@ export async function getOpenIssuesBySchool(schoolId: string) {
     .from("issues")
     .select("*")
     .eq("school_id", schoolId)
-    .neq("status", "resolved")
+    .in("status", ["submitted", "in_progress", "overdue", "unfunded"])
     .order("created_at", { ascending: false });
 
   return unwrap(data, error);

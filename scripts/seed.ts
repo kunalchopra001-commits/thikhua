@@ -19,6 +19,23 @@ const supabase = createClient<Database>(supabaseUrl, serviceRoleKey, {
   },
 });
 
+const shouldReset = process.argv.includes("--reset");
+
+async function resetSeedRows() {
+  const { error } = await supabase.rpc("reset_seed_data", {
+    seed_school_ids: SEED_DATA.schools.map((school) => school.id as string),
+    seed_issue_ids: SEED_DATA.issues.map((issue) => issue.id as string),
+    seed_report_ids: SEED_DATA.reports.map((report) => report.id as string),
+    seed_status_event_ids: SEED_DATA.status_events.map((statusEvent) => statusEvent.id as string),
+  });
+
+  if (error) {
+    throw new Error(`Could not reset seed data: ${error.message}`);
+  }
+
+  console.log("Removed existing seed rows.");
+}
+
 async function insertRows(
   table: "schools" | "issues" | "reports" | "status_events",
   rows: Database["public"]["Tables"][typeof table]["Insert"][],
@@ -33,6 +50,10 @@ async function insertRows(
 }
 
 async function seed() {
+  if (shouldReset) {
+    await resetSeedRows();
+  }
+
   await insertRows("schools", SEED_DATA.schools);
   await insertRows("issues", SEED_DATA.issues);
   await insertRows("reports", SEED_DATA.reports);

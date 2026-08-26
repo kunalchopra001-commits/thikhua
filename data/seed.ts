@@ -236,7 +236,7 @@ type IssueDraft = {
   rte_entitlement_violated: boolean;
   estimated_scale: EstimatedScale;
   location_within_premises: string | null;
-  status: "resolved" | "in_progress" | "overdue" | "submitted";
+  status: "resolved" | "in_progress" | "overdue" | "unfunded" | "submitted";
   age_days: number;
   resolved_days_ago?: number;
   resolution_photo_url: string | null;
@@ -253,7 +253,7 @@ const ISSUE_DRAFTS: IssueDraft[] = [
     rte_entitlement_violated: true,
     estimated_scale: "major",
     location_within_premises: "Classroom 4, roof beam",
-    status: "overdue",
+    status: "unfunded",
     age_days: 210,
     resolution_photo_url: null,
   },

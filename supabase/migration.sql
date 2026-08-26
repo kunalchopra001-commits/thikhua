@@ -28,7 +28,9 @@ create table public.issues (
   execution_authority text not null,
   funding_pathway text not null,
   statutory_limit_days integer not null default 90,
-  status text not null,
+  status text not null check (
+    status in ('submitted', 'in_progress', 'overdue', 'unfunded', 'resolved')
+  ),
   created_at timestamptz not null default now(),
   resolved_at timestamptz,
   resolution_photo_url text
@@ -141,3 +143,38 @@ create trigger status_events_append_only_statement
 before update or delete or truncate on public.status_events
 for each statement
 execute function public.prevent_status_event_mutation();
+
+create function public.reset_seed_data(
+  seed_school_ids uuid[],
+  seed_issue_ids uuid[],
+  seed_report_ids uuid[],
+  seed_status_event_ids uuid[]
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  alter table public.status_events disable trigger status_events_append_only;
+  alter table public.status_events disable trigger status_events_append_only_statement;
+
+  begin
+    delete from public.status_events where id = any(seed_status_event_ids);
+    delete from public.reports where id = any(seed_report_ids);
+    delete from public.issues where id = any(seed_issue_ids);
+    delete from public.schools where id = any(seed_school_ids);
+  exception
+    when others then
+      alter table public.status_events enable trigger status_events_append_only;
+      alter table public.status_events enable trigger status_events_append_only_statement;
+      raise;
+  end;
+
+  alter table public.status_events enable trigger status_events_append_only;
+  alter table public.status_events enable trigger status_events_append_only_statement;
+end;
+$$;
+
+revoke all on function public.reset_seed_data(uuid[], uuid[], uuid[], uuid[]) from public;
+grant execute on function public.reset_seed_data(uuid[], uuid[], uuid[], uuid[]) to service_role;

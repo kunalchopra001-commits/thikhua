@@ -1,18 +1,27 @@
 @import "tailwindcss";
 
+@theme static {
+  --color-sand: #f5efe3;
+  --color-charcoal: #2e2a26;
+  --color-indigo: #1f3a5f;
+  --color-rani: #c2185b;
+  --color-terracotta: #b5622f;
+  --color-green: #3f6b4f;
+  --color-stone: #8c8c84;
+  --color-ochre: #d4a537;
+}
+
 :root {
-  --sand: #f5efe3;
-  --charcoal: #2e2a26;
-  --indigo: #1f3a5f;
-  --rani: #c2185b;
-  --terracotta: #b5622f;
-  --green: #3f6b4f;
-  --stone: #8c8c84;
-  --ochre: #d4a537;
+  --sand: var(--color-sand);
+  --charcoal: var(--color-charcoal);
+  --indigo: var(--color-indigo);
+  --rani: var(--color-rani);
+  --terracotta: var(--color-terracotta);
+  --green: var(--color-green);
+  --stone: var(--color-stone);
+  --ochre: var(--color-ochre);
 }
 
 body {
   margin: 0;
-  background: var(--sand);
-  color: var(--charcoal);
 }

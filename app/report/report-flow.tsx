@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "../location-context";
 import { supabase } from "../../lib/db";
-import type { CaptureProvenance, School } from "../../lib/db";
+import type { School } from "../../lib/db";
 import { t } from "../../lib/i18n";
 import { useReportForm } from "./report-context";
 import type { ReportStep } from "./report-context";
+import { PhotoRedaction } from "./photo-redaction";
 
 const stepNames = [t("stepPhoto"), t("stepSchool"), t("stepDescribe")];
 
@@ -52,7 +53,6 @@ export function ReportFlow() {
   const timerRef = useRef<number | null>(null);
   const recordingStartedAt = useRef(0);
   const mountedRef = useRef(true);
-  const photoUrl = useObjectUrl(state.photo);
   const audioUrl = useObjectUrl(state.audio);
 
   useEffect(() => {
@@ -141,14 +141,6 @@ export function ReportFlow() {
     );
   }, [coordinates, schools, search]);
 
-  function choosePhoto(file: File | undefined, provenance: CaptureProvenance) {
-    if (!file) {
-      return;
-    }
-
-    updateState({ photo: file, captureProvenance: provenance });
-  }
-
   async function startRecording() {
     setRecordingError(null);
 
@@ -209,7 +201,7 @@ export function ReportFlow() {
 
   const currentStepForProgress = Math.min(state.step, 3);
   const canContinue =
-    (state.step === 1 && Boolean(state.photo)) ||
+    (state.step === 1 && state.photoSelected) ||
     (state.step === 2 && Boolean(state.school)) ||
     (state.step === 3 &&
       !state.isRecording &&
@@ -267,63 +259,7 @@ export function ReportFlow() {
         </ol>
 
         <div className="rounded border-2 border-indigo bg-sand p-4 sm:p-6">
-          {state.step === 1 && (
-            <section aria-labelledby="photo-heading">
-              <h2 id="photo-heading" className="text-2xl font-bold text-indigo">
-                {t("photoHeading")}
-              </h2>
-              <p className="mt-2 leading-6">{t("photoHelp")}</p>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <label className="flex min-h-12 cursor-pointer items-center justify-center rounded bg-indigo px-4 py-3 text-center font-bold text-sand focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-indigo">
-                  {t("takePhoto")}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="sr-only"
-                    onChange={(event) => choosePhoto(event.target.files?.[0], "live")}
-                  />
-                </label>
-                <label className="flex min-h-12 cursor-pointer items-center justify-center rounded border-2 border-indigo px-4 py-3 text-center font-bold focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-indigo">
-                  {t("uploadPhoto")}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(event) => choosePhoto(event.target.files?.[0], "upload")}
-                  />
-                </label>
-              </div>
-
-              {photoUrl && (
-                <div className="mt-6">
-                  <img
-                    src={photoUrl}
-                    alt={t("photoPreview")}
-                    className="max-h-96 w-full rounded border-2 border-stone object-contain"
-                  />
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-semibold">
-                      {state.captureProvenance === "live" ? t("liveCapture") : t("uploadedCapture")}
-                    </p>
-                    <button
-                      type="button"
-                      className="min-h-11 rounded border-2 border-indigo px-4 py-2 font-bold"
-                      onClick={() => updateState({ photo: null, captureProvenance: null })}
-                    >
-                      {t("removePhoto")}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <aside className="mt-6 border-l-4 border-ochre bg-ochre/10 p-4">
-                <h3 className="font-bold">{t("redactionSlotTitle")}</h3>
-                <p className="mt-1 text-sm leading-5">{t("redactionSlotBody")}</p>
-              </aside>
-            </section>
-          )}
+          <PhotoRedaction />
 
           {state.step === 2 && (
             <section aria-labelledby="school-heading">
@@ -489,15 +425,6 @@ export function ReportFlow() {
 
           {state.step === 4 && (
             <section className="space-y-6">
-              <SummarySection title={t("summaryPhoto")} editLabel={t("editPhoto")} onEdit={() => updateState({ step: 1 })}>
-                {photoUrl && (
-                  <img
-                    src={photoUrl}
-                    alt={t("photoPreview")}
-                    className="max-h-72 w-full rounded border-2 border-stone object-contain"
-                  />
-                )}
-              </SummarySection>
               <SummarySection title={t("summarySchool")} editLabel={t("editSchool")} onEdit={() => updateState({ step: 2 })}>
                 {state.school && (
                   <div>
@@ -547,6 +474,20 @@ export function ReportFlow() {
               onClick={goNext}
             >
               {state.step === 3 ? t("review") : t("next")}
+            </button>
+          )}
+          {state.step === 4 && (
+            <button
+              type="button"
+              className="min-h-12 flex-1 rounded bg-rani px-5 py-3 font-bold text-sand disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={
+                state.photoProcessingStatus !== "automatic" &&
+                state.photoProcessingStatus !== "manual_confirmed"
+              }
+            >
+              {state.photoProcessingStatus === "processing"
+                ? t("processingPhoto")
+                : t("submitReport")}
             </button>
           )}
         </nav>

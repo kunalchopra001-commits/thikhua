@@ -5,11 +5,20 @@ import type { ReactNode } from "react";
 import type { CaptureProvenance, School } from "../../lib/db";
 
 export type ReportStep = 1 | 2 | 3 | 4;
+export type PhotoProcessingStatus =
+  | "idle"
+  | "processing"
+  | "automatic"
+  | "manual_required"
+  | "manual_confirmed";
 
 export type ReportFormState = {
   step: ReportStep;
-  photo: File | null;
+  photoSelected: boolean;
+  photo: Blob | null;
   captureProvenance: CaptureProvenance | null;
+  photoProcessingStatus: PhotoProcessingStatus;
+  facesBlurred: number;
   school: School | null;
   description: string;
   audio: Blob | null;
@@ -24,8 +33,11 @@ type ReportContextValue = {
 
 const initialState: ReportFormState = {
   step: 1,
+  photoSelected: false,
   photo: null,
   captureProvenance: null,
+  photoProcessingStatus: "idle",
+  facesBlurred: 0,
   school: null,
   description: "",
   audio: null,

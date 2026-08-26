@@ -6,6 +6,7 @@ import type { BlockCentroid } from "../data/seed";
 import { getIssuesByBlock, getSchoolsByBlock, supabase } from "../lib/db";
 import type { Issue, Report, School, Severity } from "../lib/db";
 import { t } from "../lib/i18n";
+import { useLocation } from "./location-context";
 
 type HomeViewProps = {
   blocks: readonly BlockCentroid[];
@@ -45,6 +46,7 @@ function daysElapsed(createdAt: string): number {
 }
 
 export function HomeView({ blocks }: HomeViewProps) {
+  const { setCoordinates } = useLocation();
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [schools, setSchools] = useState<School[]>([]);
@@ -76,6 +78,7 @@ export function HomeView({ blocks }: HomeViewProps) {
 
         settled = true;
         window.clearTimeout(timeout);
+        setCoordinates({ latitude: coords.latitude, longitude: coords.longitude });
         setSelectedBlockId(nearestBlock(blocks, coords.latitude, coords.longitude).block_id);
       },
       () => {
@@ -89,7 +92,7 @@ export function HomeView({ blocks }: HomeViewProps) {
     );
 
     return () => window.clearTimeout(timeout);
-  }, [blocks]);
+  }, [blocks, setCoordinates]);
 
   useEffect(() => {
     if (!selectedBlockId) {

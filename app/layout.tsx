@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { t } from "../lib/i18n";
 import "./globals.css";
 import { PrototypeBanner } from "./prototype-banner";
+import { LocationProvider } from "./location-context";
 
 export const metadata: Metadata = {
   title: t("siteName"),
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
           </div>
         </header>
         <PrototypeBanner />
-        {children}
+        <LocationProvider>{children}</LocationProvider>
       </body>
     </html>
   );

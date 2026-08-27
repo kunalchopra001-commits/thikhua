@@ -58,6 +58,7 @@ export type Report = {
   text_english_official: string;
   detected_language: string;
   photo_url: string;
+  photo_urls: string[];
   reporter_mode: ReporterMode;
   reporter_name: string | null;
   reporter_contact: string | null;

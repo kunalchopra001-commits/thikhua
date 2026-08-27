@@ -470,6 +470,7 @@ export const REPORTS: ReportInsert[] = ISSUE_DRAFTS.map((issue, index) => ({
   text_english_official: REPORT_TEXTS[index].english,
   detected_language: "kn",
   photo_url: `/placeholder/issue-${issue.code.toLowerCase()}.jpg`,
+  photo_urls: [`/placeholder/issue-${issue.code.toLowerCase()}.jpg`],
   reporter_mode: "anonymous" satisfies ReporterMode,
   reporter_name: null,
   reporter_contact: null,

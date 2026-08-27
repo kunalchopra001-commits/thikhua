@@ -28,7 +28,8 @@ you, here is who must act, here is the funding pathway, and here is where it is 
 ## 2. Non-negotiables
 
 1. No real school is named with a real defect allegation. All seed schools are fictional.
-2. No child's face may ever be uploaded. Blurring is client-side and fails closed.
+2. Face redaction prefers on-device processing and falls back to in-memory server processing.
+   The unprocessed image is never written to storage; only the redacted image is persisted.
 3. `status_events` is append-only. Nothing in the codebase may update or delete a row.
 4. Anonymous reporting must support full follow-up via complaint code.
 5. Every mocked dependency is labelled in the UI.
@@ -106,8 +107,14 @@ Show the block view even when it has zero issues, with a "be the first to check 
 empty state.
 
 ### 5.2 Report flow
-Step 1 photo → Step 2 school → Step 3 describe. State in one React context, steps revisitable.
-Step 2 shortlists 5 nearest schools as tappable cards + manual search. Never auto-select.
+Step 1 accepts 1–5 defect photos plus an optional, separately labelled school-name-board
+photo → Step 2 school → Step 3 describe. State lives in one React context and steps are
+revisitable. Process defect photos concurrently through the redaction pipeline. A name-board
+photo is an optional shortcut: after redaction, extract its visible school name, UDISE code,
+village or block, managing body, and confidence, then fuzzy-match it against the school seed.
+Step 2 shows a name-board match first and visually distinguished, followed by the usual 5
+nearest schools and manual search. **Never auto-select**, including high-confidence name-board
+matches; the citizen must tap to confirm.
 Step 3 offers text and MediaRecorder voice, in any language.
 
 ### 5.3 Duplicate check
@@ -146,12 +153,23 @@ experience.
 
 ## 6. Face blurring
 
-Client-side, fail-closed. MediaPipe Tasks Vision `FaceDetector` from CDN. Detect → draw to
-canvas → heavy blur over each face region → rasterise. **Only the blurred canvas output is
-uploaded.** Show a before/after toggle and a blurred-face count.
+Fail-closed with two automatic paths for every defect photo and the optional name-board photo.
+Process multiple selected photos concurrently. Prefer an already-warm, session-cached MediaPipe Tasks
+Vision `FaceDetector` running on-device. Begin loading it when `/report` opens and allow up to
+20 seconds for initialisation. If it is not ready or detection fails, send the in-memory image
+to the server, use an OpenAI vision model to locate faces, and pixelate those regions
+server-side. The unprocessed image is held in memory only and is never written to storage.
+**Only the redacted output is persisted.** Show a before/after toggle, a hidden-face count, and
+state plainly whether redaction ran on-device.
 
-Detector load failure or 8-second timeout → manual redaction fallback (drag rectangles, same
-canvas blur). Never silently accept an unblurred photo.
+If both automatic paths fail, use manual redaction (drag rectangles, same canvas pixelation).
+Never silently accept or persist an unredacted photo.
+
+After the name-board photo is redacted, a server-side vision call extracts visible school-name
+text in any script, UDISE code, village or block, managing body, and confidence using strict
+Structured Outputs validated with Zod. Match UDISE exactly and names fuzzily against the
+fictional seed. Extraction or matching failure silently leaves the standard nearest-school
+flow unchanged. A suggestion is never an automatic selection.
 
 Legal basis: under the DPDP Act any identifiable child is a child data subject, and the
 educational-institution exemption does not extend to this platform. This is a legal control,
@@ -252,7 +270,8 @@ Each issue needs a plausible `status_events` history with realistic officer note
 
 ## 10. `/about` — honesty page
 
-**Works today:** trilingual capture and rendering, client-side face blurring, severity
+**Works today:** trilingual capture and rendering, on-device-first face redaction with a
+server-side fallback, severity
 triage, school identification, dual-authority routing, duplicate detection at intake,
 append-only public ledger, anonymous tracking by code.
 
@@ -264,7 +283,8 @@ simulated with no real authorisation.
 than replace official channels by generating correctly formatted complaints for CPGRAMS or
 state portals and tracking those reference numbers alongside; publish an open read API.
 
-**Retention:** raw photos with EXIF are never stored — stripped and blurred client-side.
+**Retention:** raw photos with EXIF are never stored. On-device redaction is preferred; the
+server fallback holds the unprocessed image in memory only. Only a redacted image is persisted.
 Precise coordinates downgrade to block-level after school confirmation. Reporter contact is
 erased once the issue closes plus an appeal window. The permanent public record contains no
 personal data — only institutional facts.

@@ -31,10 +31,12 @@ replacement and tell me what changed.
 
 1. **`status_events` is append-only.** Never write an update or delete against that table.
    Corrections are new events.
-2. **The original of an uploaded photo must never leave the browser.** Only the
-   face-blurred canvas output may be uploaded, ever.
-3. **Face blurring fails closed.** If detection fails or times out, fall back to manual
-   redaction. Never silently accept an unblurred photo.
+2. **On-device photo redaction is attempted first and preferred.** Server-side redaction is
+   the fallback. The unprocessed image is held in memory only and never written to storage;
+   only the redacted image may be persisted.
+3. **Face blurring fails closed.** If on-device detection fails or times out, try the
+   in-memory server fallback; if that also fails, require manual redaction. Never silently
+   accept an unredacted photo.
 4. **Authority derivation is deterministic code**, per SPEC.md §4. Never ask an AI model to
    decide which office is responsible.
 5. **All schools in seed data are fictional.** Never use a real school name attached to a

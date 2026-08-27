@@ -38,6 +38,35 @@ function distanceSquared(school: School, latitude: number, longitude: number) {
   return (school.lat - latitude) ** 2 + (school.lng - longitude) ** 2;
 }
 
+function normalizeSchoolText(value: string) {
+  return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function levenshtein(left: string, right: string) {
+  const row = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = row[0];
+    row[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const previous = row[rightIndex];
+      row[rightIndex] = Math.min(
+        row[rightIndex] + 1,
+        row[rightIndex - 1] + 1,
+        diagonal + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+      diagonal = previous;
+    }
+  }
+  return row[right.length];
+}
+
+function nameSimilarity(left: string, right: string) {
+  const normalizedLeft = normalizeSchoolText(left);
+  const normalizedRight = normalizeSchoolText(right);
+  if (!normalizedLeft || !normalizedRight) return 0;
+  return 1 - levenshtein(normalizedLeft, normalizedRight) / Math.max(normalizedLeft.length, normalizedRight.length);
+}
+
 export function ReportFlow() {
   const { state, updateState } = useReportForm();
   const { coordinates, setCoordinates } = useLocation();
@@ -141,6 +170,27 @@ export function ReportFlow() {
     );
   }, [coordinates, schools, search]);
 
+  const signboardSuggestion = useMemo(() => {
+    const extraction = state.signboardPhoto?.extraction;
+    if (!extraction) return null;
+    const udise = extraction.udise_code ? normalizeSchoolText(extraction.udise_code) : "";
+    if (udise) {
+      const exact = schools.find((school) => normalizeSchoolText(school.udise_code) === udise);
+      if (exact) return exact;
+    }
+    if (!extraction.school_name) return null;
+    const ranked = schools
+      .map((school) => ({
+        school,
+        score: Math.max(
+          nameSimilarity(extraction.school_name ?? "", school.name_en),
+          nameSimilarity(extraction.school_name ?? "", school.name_kn),
+        ),
+      }))
+      .sort((left, right) => right.score - left.score);
+    return ranked[0]?.score >= 0.45 ? ranked[0].school : null;
+  }, [schools, state.signboardPhoto?.extraction]);
+
   async function startRecording() {
     setRecordingError(null);
 
@@ -201,7 +251,7 @@ export function ReportFlow() {
 
   const currentStepForProgress = Math.min(state.step, 3);
   const canContinue =
-    (state.step === 1 && state.photoSelected) ||
+    (state.step === 1 && state.photos.length > 0) ||
     (state.step === 2 && Boolean(state.school)) ||
     (state.step === 3 &&
       !state.isRecording &&
@@ -270,6 +320,35 @@ export function ReportFlow() {
 
               {schoolsLoading && <p className="mt-6">{t("loadingSchools")}</p>}
               {schoolsError && <p className="mt-6" role="alert">{t("schoolLoadError")}</p>}
+
+              {!schoolsLoading && !schoolsError && signboardSuggestion && (
+                <div className="mt-6 border-l-4 border-rani bg-rani/10 p-3">
+                  <p className="mb-2 font-bold">{t("signboardSuggestion")}</p>
+                  <SchoolCard
+                    school={signboardSuggestion}
+                    selected={state.school?.id === signboardSuggestion.id}
+                    suggested
+                    onSelect={() => updateState({ school: signboardSuggestion })}
+                  />
+                  <p className="mt-2 text-sm">
+                    {t("signboardReadText", {
+                      text: [
+                        state.signboardPhoto?.extraction?.school_name,
+                        state.signboardPhoto?.extraction?.udise_code,
+                        state.signboardPhoto?.extraction?.village_or_block,
+                        state.signboardPhoto?.extraction?.managing_body,
+                      ].filter(Boolean).join(" · "),
+                    })}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    {t("signboardConfidence", {
+                      confidence: Math.round(
+                        (state.signboardPhoto?.extraction?.confidence ?? 0) * 100,
+                      ),
+                    })}
+                  </p>
+                </div>
+              )}
 
               {!schoolsLoading && !schoolsError && coordinates && (
                 <div className="mt-6">
@@ -481,11 +560,18 @@ export function ReportFlow() {
               type="button"
               className="min-h-12 flex-1 rounded bg-rani px-5 py-3 font-bold text-sand disabled:cursor-not-allowed disabled:opacity-50"
               disabled={
-                state.photoProcessingStatus !== "automatic" &&
-                state.photoProcessingStatus !== "manual_confirmed"
+                !state.photos.every(
+                  (photo) => photo.status === "automatic" || photo.status === "manual_confirmed",
+                ) ||
+                Boolean(
+                  state.signboardPhoto &&
+                    state.signboardPhoto.status !== "automatic" &&
+                    state.signboardPhoto.status !== "manual_confirmed",
+                )
               }
             >
-              {state.photoProcessingStatus === "processing"
+              {state.photos.some((photo) => photo.status === "processing") ||
+              state.signboardPhoto?.status === "processing"
                 ? t("processingPhoto")
                 : t("submitReport")}
             </button>
@@ -500,16 +586,22 @@ function SchoolCard({
   school,
   selected,
   onSelect,
+  suggested = false,
 }: {
   school: School;
   selected: boolean;
   onSelect: () => void;
+  suggested?: boolean;
 }) {
   return (
     <button
       type="button"
       className={`min-h-24 rounded border-2 p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo ${
-        selected ? "border-indigo bg-indigo text-sand" : "border-stone bg-sand text-charcoal"
+        selected
+          ? "border-indigo bg-indigo text-sand"
+          : suggested
+            ? "border-rani bg-sand text-charcoal"
+            : "border-stone bg-sand text-charcoal"
       }`}
       aria-pressed={selected}
       onClick={onSelect}

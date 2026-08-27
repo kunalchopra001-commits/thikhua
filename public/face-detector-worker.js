@@ -7,20 +7,35 @@ const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/was
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_full_range/float16/latest/blaze_face_full_range.tflite";
 
+let detectorPromise;
+
+async function initialiseDetector() {
+  const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+  return FaceDetector.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: MODEL_URL,
+    },
+    runningMode: "IMAGE",
+    minDetectionConfidence: 0.5,
+  });
+}
+
+detectorPromise = initialiseDetector();
+detectorPromise.then(
+  () => self.postMessage({ type: "ready" }),
+  (error) =>
+    self.postMessage({
+      type: "initialization_error",
+      error: error instanceof Error ? error.message : "Face detector initialization failed",
+    }),
+);
+
 self.addEventListener("message", async (event) => {
+  const id = event.data.id;
   const image = event.data.image;
-  let detector;
 
   try {
-    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
-    detector = await FaceDetector.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: MODEL_URL,
-      },
-      runningMode: "IMAGE",
-      minDetectionConfidence: 0.5,
-    });
-
+    const detector = await detectorPromise;
     const result = detector.detect(image);
     const boxes = result.detections.map((detection) => {
       const box = detection.boundingBox;
@@ -32,11 +47,13 @@ self.addEventListener("message", async (event) => {
       };
     });
 
-    self.postMessage({ boxes });
+    self.postMessage({ id, boxes });
   } catch (error) {
-    self.postMessage({ error: error instanceof Error ? error.message : "Face detection failed" });
+    self.postMessage({
+      id,
+      error: error instanceof Error ? error.message : "Face detection failed",
+    });
   } finally {
     image.close();
-    detector?.close();
   }
 });

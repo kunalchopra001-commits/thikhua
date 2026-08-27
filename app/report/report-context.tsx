@@ -11,14 +11,34 @@ export type PhotoProcessingStatus =
   | "automatic"
   | "manual_required"
   | "manual_confirmed";
+export type RedactionPath = "device" | "server" | "manual" | null;
+
+export type ReportPhoto = {
+  id: string;
+  photo: Blob | null;
+  captureProvenance: CaptureProvenance;
+  status: PhotoProcessingStatus;
+  facesHidden: number;
+  redactionPath: RedactionPath;
+};
+
+export type SignboardExtraction = {
+  school_name: string | null;
+  udise_code: string | null;
+  village_or_block: string | null;
+  managing_body: string | null;
+  confidence: number;
+};
+
+export type SignboardPhoto = ReportPhoto & {
+  extractionStatus: "idle" | "processing" | "complete";
+  extraction: SignboardExtraction | null;
+};
 
 export type ReportFormState = {
   step: ReportStep;
-  photoSelected: boolean;
-  photo: Blob | null;
-  captureProvenance: CaptureProvenance | null;
-  photoProcessingStatus: PhotoProcessingStatus;
-  facesBlurred: number;
+  photos: ReportPhoto[];
+  signboardPhoto: SignboardPhoto | null;
   school: School | null;
   description: string;
   audio: Blob | null;
@@ -29,15 +49,14 @@ export type ReportFormState = {
 type ReportContextValue = {
   state: ReportFormState;
   updateState: (updates: Partial<ReportFormState>) => void;
+  updatePhotos: (updater: (photos: ReportPhoto[]) => ReportPhoto[]) => void;
+  updateSignboardPhoto: (updater: (photo: SignboardPhoto | null) => SignboardPhoto | null) => void;
 };
 
 const initialState: ReportFormState = {
   step: 1,
-  photoSelected: false,
-  photo: null,
-  captureProvenance: null,
-  photoProcessingStatus: "idle",
-  facesBlurred: 0,
+  photos: [],
+  signboardPhoto: null,
   school: null,
   description: "",
   audio: null,
@@ -52,12 +71,23 @@ export function ReportProvider({ children }: { children: ReactNode }) {
   const updateState = useCallback((updates: Partial<ReportFormState>) => {
     setState((current) => ({ ...current, ...updates }));
   }, []);
+  const updatePhotos = useCallback((updater: (photos: ReportPhoto[]) => ReportPhoto[]) => {
+    setState((current) => ({ ...current, photos: updater(current.photos) }));
+  }, []);
+  const updateSignboardPhoto = useCallback(
+    (updater: (photo: SignboardPhoto | null) => SignboardPhoto | null) => {
+      setState((current) => ({ ...current, signboardPhoto: updater(current.signboardPhoto) }));
+    },
+    [],
+  );
   const value = useMemo(
     () => ({
       state,
       updateState,
+      updatePhotos,
+      updateSignboardPhoto,
     }),
-    [state, updateState],
+    [state, updatePhotos, updateSignboardPhoto, updateState],
   );
 
   return <ReportContext.Provider value={value}>{children}</ReportContext.Provider>;

@@ -44,6 +44,7 @@ create table public.reports (
   text_english_official text not null,
   detected_language text not null,
   photo_url text not null,
+  photo_urls text[] not null default '{}',
   reporter_mode text not null check (
     reporter_mode in ('anonymous', 'named_private', 'named_public')
   ),

@@ -39,7 +39,11 @@ function distanceSquared(school: School, latitude: number, longitude: number) {
 }
 
 function normalizeSchoolText(value: string) {
-  return value.normalize("NFKC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/\bgovt\.?\b/gu, "government")
+    .replace(/[^\p{L}\p{N}]/gu, "");
 }
 
 function levenshtein(left: string, right: string) {

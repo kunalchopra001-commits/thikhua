@@ -17,6 +17,26 @@ const faceDetectionSchema = z.object({
 
 const MAX_FACE_AREA_RATIO = 0.4;
 
+type ServerRedactionFailureReason =
+  | "server_rejected_size"
+  | "network_error"
+  | "request_timeout"
+  | "model_error"
+  | "model_returned_oversized_box";
+
+const OPENAI_TIMEOUT_MS = 30_000;
+const OPENAI_NETWORK_RETRIES = 2;
+const MAX_VISION_IMAGE_BYTES = 3_000_000;
+
+class ServerRedactionError extends Error {
+  readonly reason: ServerRedactionFailureReason;
+
+  constructor(reason: ServerRedactionFailureReason, message: string) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
 const openAIResponseSchema = z.object({
   output: z.array(
     z.object({
@@ -65,55 +85,101 @@ function outputText(response: unknown) {
     .find((content) => content.type === "output_text")?.text;
 }
 
-async function requestFaceBoxes(imageDataUrl: string, retryInstruction?: string) {
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function requestFaceBoxes(
+  imageDataUrl: string,
+  imageSizeBytes: number,
+  retryInstruction?: string,
+) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+    throw new ServerRedactionError("model_error", "OPENAI_API_KEY is not configured");
   }
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-5-nano",
-      store: false,
-      input: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "input_text",
-              text: `${retryInstruction ?? ""}
+  const body = JSON.stringify({
+    model: "gpt-5-nano",
+    store: false,
+    input: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: `${retryInstruction ?? ""}
 Locate every visible human face and return a TIGHT box around facial identity only: hairline to chin vertically and ear to ear horizontally. Do not include the neck, shoulders, torso, the whole person, or empty space around the face. Include partially visible faces, but box only the visible facial area.
 
 Use coordinates normalized from 0 to 1000 relative to the full image. Worked example: in a 1000 by 1000 portrait where the face extends from x=350 to x=650 and y=180 to y=530, return {"x":350,"y":180,"width":300,"height":350}. Do not return a larger head-and-torso or whole-person box.`,
-            },
-            {
-              type: "input_image",
-              image_url: imageDataUrl,
-              detail: "high",
-            },
-          ],
-        },
-      ],
-      text: { format: responseFormat },
-    }),
+          },
+          {
+            type: "input_image",
+            image_url: imageDataUrl,
+            detail: "high",
+          },
+        ],
+      },
+    ],
+    text: { format: responseFormat },
   });
 
-  if (!response.ok) {
-    throw new Error(`OpenAI face detection failed with status ${response.status}`);
+  for (let attempt = 0; attempt <= OPENAI_NETWORK_RETRIES; attempt += 1) {
+    console.info("[server redaction] OpenAI request", {
+      attempt: attempt + 1,
+      imageSizeBytes,
+    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new ServerRedactionError(
+          "model_error",
+          `OpenAI face detection failed with status ${response.status}`,
+        );
+      }
+
+      return outputText(await response.json());
+    } catch (error) {
+      if (error instanceof ServerRedactionError) {
+        throw error;
+      }
+
+      const timedOut = controller.signal.aborted;
+      if (attempt === OPENAI_NETWORK_RETRIES) {
+        throw new ServerRedactionError(
+          timedOut ? "request_timeout" : "network_error",
+          timedOut
+            ? "OpenAI face detection timed out after 30 seconds"
+            : `OpenAI face detection network request failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+
+      await wait(500 * 2 ** attempt);
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
-  return outputText(await response.json());
+  throw new ServerRedactionError("network_error", "OpenAI face detection request failed");
 }
 
-async function detectFaceBoxes(imageDataUrl: string) {
+async function detectFaceBoxes(imageDataUrl: string, imageSizeBytes: number) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const text = await requestFaceBoxes(
       imageDataUrl,
+      imageSizeBytes,
       attempt === 1
         ? "The prior response was invalid or a box covered too much of the image. Follow the JSON schema exactly. Every box must cover no more than 40% of the full image, and must be tightly limited to hairline-to-chin and ear-to-ear."
         : undefined,
@@ -126,7 +192,10 @@ async function detectFaceBoxes(imageDataUrl: string) {
 
       if (hasOversizedBox) {
         if (attempt === 1) {
-          throw new Error("Face bounding box exceeds 40% of the image area");
+          throw new ServerRedactionError(
+            "model_returned_oversized_box",
+            "Face bounding box exceeds 40% of the image area",
+          );
         }
         continue;
       }
@@ -141,9 +210,15 @@ async function detectFaceBoxes(imageDataUrl: string) {
   throw new Error("Face box response was invalid");
 }
 
-export async function redactPhotoOnServer(formData: FormData) {
+async function performServerRedaction(formData: FormData) {
   const image = formData.get("image");
-  if (!(image instanceof File) || !image.type.startsWith("image/") || image.size > 5_000_000) {
+  if (image instanceof File && image.size > 5_000_000) {
+    throw new ServerRedactionError(
+      "server_rejected_size",
+      "Prepared image exceeds the 5 MB server limit",
+    );
+  }
+  if (!(image instanceof File) || !image.type.startsWith("image/")) {
     throw new Error("Invalid image");
   }
 
@@ -153,8 +228,27 @@ export async function redactPhotoOnServer(formData: FormData) {
     throw new Error("Image dimensions are unavailable");
   }
 
-  const imageDataUrl = `data:${image.type};base64,${input.toString("base64")}`;
-  const result = await detectFaceBoxes(imageDataUrl);
+  let visionInput = input;
+  if (visionInput.length > MAX_VISION_IMAGE_BYTES) {
+    const longestEdge = Math.max(metadata.width, metadata.height);
+    let targetEdge = Math.max(640, Math.floor(longestEdge * 0.75));
+
+    while (visionInput.length > MAX_VISION_IMAGE_BYTES && targetEdge >= 640) {
+      visionInput = await sharp(input)
+        .resize({
+          width: targetEdge,
+          height: targetEdge,
+          fit: "inside",
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      targetEdge = Math.floor(targetEdge * 0.75);
+    }
+  }
+
+  const imageDataUrl = `data:image/jpeg;base64,${visionInput.toString("base64")}`;
+  const result = await detectFaceBoxes(imageDataUrl, visionInput.length);
   const overlays = await Promise.all(
     result.faces.map(async (face) => {
       const paddingX = face.width * 0.06;
@@ -206,4 +300,19 @@ export async function redactPhotoOnServer(formData: FormData) {
     imageBase64: processed.toString("base64"),
     facesHidden: result.faces.length,
   };
+}
+
+export async function redactPhotoOnServer(formData: FormData) {
+  try {
+    const result = await performServerRedaction(formData);
+    return { ok: true as const, ...result };
+  } catch (error) {
+    const reason =
+      error instanceof ServerRedactionError ? error.reason : "model_error";
+    return {
+      ok: false as const,
+      failureReason: reason,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    };
+  }
 }

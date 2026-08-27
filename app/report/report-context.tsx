@@ -5,11 +5,19 @@ import type { ReactNode } from "react";
 import type { CaptureProvenance, School } from "../../lib/db";
 
 export type ReportStep = 1 | 2 | 3 | 4;
+export type PhotoFailureReason =
+  | "decode_failed"
+  | "mediapipe_unavailable"
+  | "server_rejected_size"
+  | "network_error"
+  | "request_timeout"
+  | "model_error"
+  | "model_returned_oversized_box";
 export type PhotoProcessingStatus =
   | "idle"
   | "processing"
   | "automatic"
-  | "manual_required"
+  | PhotoFailureReason
   | "manual_confirmed";
 export type RedactionPath = "device" | "server" | "manual" | null;
 
@@ -18,6 +26,7 @@ export type ReportPhoto = {
   photo: Blob | null;
   captureProvenance: CaptureProvenance;
   status: PhotoProcessingStatus;
+  failureReason: PhotoFailureReason | null;
   facesHidden: number;
   redactionPath: RedactionPath;
 };
@@ -33,6 +42,7 @@ export type SignboardExtraction = {
 export type SignboardPhoto = ReportPhoto & {
   extractionStatus: "idle" | "processing" | "complete";
   extraction: SignboardExtraction | null;
+  extractionFailureReason: string | null;
 };
 
 export type ReportFormState = {

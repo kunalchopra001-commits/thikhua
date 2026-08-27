@@ -9,12 +9,46 @@ import { t } from "../../lib/i18n";
 import { extractSchoolSignboard } from "./extract-signboard-action";
 import { redactPhotoOnServer } from "./redact-photo-action";
 import { useReportForm } from "./report-context";
-import type { RedactionPath, ReportPhoto, SignboardPhoto } from "./report-context";
+import type { PhotoFailureReason, RedactionPath, ReportPhoto, SignboardPhoto } from "./report-context";
 
 type Point = { x: number; y: number };
 type RedactionResult = { photo: Blob; facesHidden: number; redactionPath: RedactionPath };
 const MAX_IMAGE_EDGE = 1600;
 const MAX_DEFECT_PHOTOS = 5;
+
+class PhotoProcessingError extends Error {
+  readonly reason: PhotoFailureReason;
+
+  constructor(reason: PhotoFailureReason, message: string) {
+    super(message);
+    this.reason = reason;
+  }
+}
+
+function isFailureStatus(status: ReportPhoto["status"]): status is PhotoFailureReason {
+  return [
+    "decode_failed",
+    "mediapipe_unavailable",
+    "server_rejected_size",
+    "network_error",
+    "request_timeout",
+    "model_error",
+    "model_returned_oversized_box",
+  ].includes(status);
+}
+
+function failureText(reason: PhotoFailureReason) {
+  const keys = {
+    decode_failed: "photoFailureDecode",
+    mediapipe_unavailable: "photoFailureMediaPipe",
+    server_rejected_size: "photoFailureServerSize",
+    network_error: "photoFailureNetwork",
+    request_timeout: "photoFailureTimeout",
+    model_error: "photoFailureModel",
+    model_returned_oversized_box: "photoFailureOversizedBox",
+  } as const;
+  return t(keys[reason]);
+}
 
 function useObjectUrl(value: Blob | null) {
   const [url, setUrl] = useState<string | null>(null);
@@ -85,17 +119,32 @@ async function redactCanvas(source: HTMLCanvasElement): Promise<RedactionResult>
       const processed = copyCanvas(source);
       boxes.forEach((box) => pixelateRegion(processed, box));
       return { photo: await canvasToBlob(processed), facesHidden: boxes.length, redactionPath: "device" };
-    } catch { /* Continue to server fallback. */ }
+    } catch (error) {
+      console.warn("[photo redaction] mediapipe_unavailable", error);
+    }
+  } else {
+    console.warn("[photo redaction] mediapipe_unavailable: detector is not ready");
   }
   const formData = new FormData();
   formData.append("image", await canvasToBlob(source), "report-photo.jpg");
-  const result = await redactPhotoOnServer(formData);
+  let result: Awaited<ReturnType<typeof redactPhotoOnServer>>;
+  try {
+    result = await redactPhotoOnServer(formData);
+  } catch (error) {
+    throw new PhotoProcessingError(
+      "model_error",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  if (!result.ok) {
+    throw new PhotoProcessingError(result.failureReason, result.errorMessage);
+  }
   return { photo: base64ToBlob(result.imageBase64), facesHidden: result.facesHidden, redactionPath: "server" };
 }
 
 function statusText(photo: ReportPhoto) {
   if (photo.status === "processing") return t("photoStatusProcessing");
-  if (photo.status === "manual_required") return t("photoStatusManual");
+  if (isFailureStatus(photo.status)) return t("photoStatusManual");
   if (photo.status === "manual_confirmed") return t("photoStatusManualComplete");
   return photo.facesHidden === 0 ? t("noFacesFound") : t("facesBlurred", { count: photo.facesHidden });
 }
@@ -113,19 +162,38 @@ export function PhotoRedaction() {
     updateSignboardPhoto((photo) => photo && (!id || photo.id === id) ? { ...photo, ...updates } : photo);
   }
   async function extractSignboard(photo: Blob, id: string) {
-    patchSignboard({ extractionStatus: "processing" }, id);
+    patchSignboard({ extractionStatus: "processing", extractionFailureReason: null }, id);
     try {
       const formData = new FormData();
       formData.append("image", photo, "school-signboard.jpg");
-      patchSignboard({ extraction: await extractSchoolSignboard(formData), extractionStatus: "complete" }, id);
-    } catch { patchSignboard({ extraction: null, extractionStatus: "complete" }, id); }
+      const result = await extractSchoolSignboard(formData);
+      console.info("[signboard extraction] raw model response", result.rawResponses);
+      if (!result.ok) {
+        console.error("[signboard extraction] failed", result.failureReason, result.errorMessage);
+        patchSignboard({
+          extraction: null,
+          extractionStatus: "complete",
+          extractionFailureReason: `${result.failureReason}: ${result.errorMessage}`,
+        }, id);
+        return;
+      }
+      patchSignboard({
+        extraction: result.extraction,
+        extractionStatus: "complete",
+        extractionFailureReason: null,
+      }, id);
+    } catch (error) {
+      const reason = `action_error: ${error instanceof Error ? error.message : String(error)}`;
+      console.error("[signboard extraction] failed", error);
+      patchSignboard({ extraction: null, extractionStatus: "complete", extractionFailureReason: reason }, id);
+    }
   }
 
   async function processPhoto(file: File, provenance: CaptureProvenance, kind: "defect" | "signboard") {
     const id = crypto.randomUUID();
-    const base: ReportPhoto = { id, photo: null, captureProvenance: provenance, status: "processing", facesHidden: 0, redactionPath: null };
+    const base: ReportPhoto = { id, photo: null, captureProvenance: provenance, status: "processing", failureReason: null, facesHidden: 0, redactionPath: null };
     if (kind === "defect") updatePhotos((photos) => [...photos, base].slice(0, MAX_DEFECT_PHOTOS));
-    else updateSignboardPhoto(() => ({ ...base, extractionStatus: "idle", extraction: null }));
+    else updateSignboardPhoto(() => ({ ...base, extractionStatus: "idle", extraction: null, extractionFailureReason: null }));
     try {
       const source = await rasterise(file);
       file = undefined as never;
@@ -136,13 +204,17 @@ export function PhotoRedaction() {
         const result = await redactCanvas(source);
         if (kind === "defect") patchPhoto(id, { ...result, status: "automatic" });
         else { patchSignboard({ ...result, status: "automatic" }, id); void extractSignboard(result.photo, id); }
-      } catch {
-        if (kind === "defect") patchPhoto(id, { status: "manual_required" });
-        else patchSignboard({ status: "manual_required" }, id);
+      } catch (error) {
+        const reason = error instanceof PhotoProcessingError ? error.reason : "model_error";
+        console.error(`[photo redaction] ${reason}`, error);
+        if (kind === "defect") patchPhoto(id, { status: reason, failureReason: reason });
+        else patchSignboard({ status: reason, failureReason: reason }, id);
       }
-    } catch {
-      if (kind === "defect") patchPhoto(id, { status: "manual_required" });
-      else patchSignboard({ status: "manual_required" }, id);
+    } catch (error) {
+      const reason = "decode_failed" as const;
+      console.error(`[photo redaction] ${reason}`, error);
+      if (kind === "defect") patchPhoto(id, { status: reason, failureReason: reason });
+      else patchSignboard({ status: reason, failureReason: reason }, id);
     }
   }
 
@@ -195,15 +267,17 @@ function PhotoInput({ label, capture, multiple, outline, onFiles }: { label: str
   return <label className={`flex min-h-12 cursor-pointer items-center justify-center rounded px-4 py-3 text-center font-bold ${outline ? "border-2 border-indigo" : "bg-indigo text-sand"}`}>{label}<input type="file" accept="image/*" capture={capture ? "environment" : undefined} multiple={multiple} className="sr-only" onChange={(event) => { onFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }} /></label>;
 }
 
-function PhotoThumbnail({ photo, preview, onRemove }: { photo: ReportPhoto; preview: Blob | null; onRemove: () => void }) {
+function PhotoThumbnail({ photo, preview, onRemove }: { photo: ReportPhoto | SignboardPhoto; preview: Blob | null; onRemove: () => void }) {
   const url = useObjectUrl(preview ?? photo.photo);
-  return <div className="w-36 shrink-0 rounded border-2 border-stone p-2">{url && <img src={url} alt={t("photoPreview")} className="aspect-square w-full rounded object-cover" />}<p className="mt-2 text-xs font-bold">{statusText(photo)}</p><button type="button" className="mt-2 min-h-10 w-full rounded border-2 border-indigo px-2 text-sm font-bold" onClick={onRemove}>{t("removePhoto")}</button></div>;
+  const extractionFailureReason =
+    "extractionFailureReason" in photo ? photo.extractionFailureReason : null;
+  return <div className="w-36 shrink-0 rounded border-2 border-stone p-2">{url && <img src={url} alt={t("photoPreview")} className="aspect-square w-full rounded object-cover" />}<p className="mt-2 text-xs font-bold">{statusText(photo)}</p>{photo.failureReason && <p className="mt-1 text-xs leading-4 text-charcoal">{failureText(photo.failureReason)}</p>}{extractionFailureReason && <p className="mt-1 text-xs leading-4 text-charcoal">{t("signboardExtractionFailure", { reason: extractionFailureReason })}</p>}<button type="button" className="mt-2 min-h-10 w-full rounded border-2 border-indigo px-2 text-sm font-bold" onClick={onRemove}>{t("removePhoto")}</button></div>;
 }
 
 function ReviewPhoto({ photo, original, source, onConfirm }: { photo: ReportPhoto; original: Blob | null; source?: HTMLCanvasElement; onConfirm: (blob: Blob, count: number) => void }) {
   const [showBefore, setShowBefore] = useState(false);
   const originalUrl = useObjectUrl(original); const processedUrl = useObjectUrl(photo.photo);
-  if (photo.status === "manual_required" && source) return <ManualRedaction source={source} onConfirm={onConfirm} />;
+  if (isFailureStatus(photo.status) && source) return <ManualRedaction source={source} reason={photo.failureReason} onConfirm={onConfirm} />;
   if (photo.status === "processing") return <p className="border-l-4 border-indigo bg-indigo/10 p-3 font-bold">{t("processingPhoto")}</p>;
   const pathText = photo.redactionPath === "device"
     ? t("redactionDeviceComplete")
@@ -213,10 +287,10 @@ function ReviewPhoto({ photo, original, source, onConfirm }: { photo: ReportPhot
   return <div><p className="mb-2 text-sm font-bold">{pathText} · {statusText(photo)}</p>{processedUrl && <img src={showBefore && originalUrl ? originalUrl : processedUrl} alt={showBefore ? t("beforePhoto") : t("afterPhoto")} className="max-h-72 w-full rounded border-2 border-stone object-contain" />}{originalUrl && processedUrl && <button type="button" className="mt-2 min-h-10 rounded border-2 border-indigo px-3 text-sm font-bold" onClick={() => setShowBefore((value) => !value)}>{showBefore ? t("showAfter") : t("showBefore")}</button>}</div>;
 }
 
-function ManualRedaction({ source, onConfirm }: { source: HTMLCanvasElement; onConfirm: (blob: Blob, count: number) => void }) {
+function ManualRedaction({ source, reason, onConfirm }: { source: HTMLCanvasElement; reason: PhotoFailureReason | null; onConfirm: (blob: Blob, count: number) => void }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null); const baseRef = useRef<HTMLCanvasElement>(copyCanvas(source)); const startRef = useRef<Point | null>(null); const [count, setCount] = useState(0);
   useEffect(() => { const canvas = canvasRef.current; if (!canvas) return; canvas.width = source.width; canvas.height = source.height; canvas.getContext("2d")?.drawImage(baseRef.current, 0, 0); }, [source]);
   function point(event: ReactPointerEvent<HTMLCanvasElement>) { const bounds = event.currentTarget.getBoundingClientRect(); return { x: ((event.clientX - bounds.left) / bounds.width) * event.currentTarget.width, y: ((event.clientY - bounds.top) / bounds.height) * event.currentTarget.height }; }
   function finish(event: ReactPointerEvent<HTMLCanvasElement>) { const start = startRef.current; if (!start) return; const end = point(event); startRef.current = null; const box = { originX: Math.min(start.x, end.x), originY: Math.min(start.y, end.y), width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) }; if (box.width >= 4 && box.height >= 4) { pixelateRegion(baseRef.current, box, false); canvasRef.current?.getContext("2d")?.drawImage(baseRef.current, 0, 0); setCount((value) => value + 1); } }
-  return <div className="border-l-4 border-rani bg-rani/10 p-3"><p className="font-bold">{t("manualRedactionTitle")}</p><p className="mt-1 text-sm">{t("manualRedactionBody")}</p><canvas ref={canvasRef} className="mt-3 h-auto w-full touch-none rounded border-2 border-rani" aria-label={t("manualRedactionCanvas")} onPointerDown={(event) => { startRef.current = point(event); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={finish} /><button type="button" className="mt-3 min-h-11 w-full rounded bg-indigo px-3 font-bold text-sand" onClick={() => void canvasToBlob(baseRef.current).then((blob) => onConfirm(blob, count))}>{t("confirmManualRedaction")}</button></div>;
+  return <div className="border-l-4 border-rani bg-rani/10 p-3"><p className="font-bold">{t("manualRedactionTitle")}</p><p className="mt-1 text-sm">{t("manualRedactionBody")}</p>{reason && <p className="mt-1 text-xs leading-4 text-charcoal">{failureText(reason)}</p>}<canvas ref={canvasRef} className="mt-3 h-auto w-full touch-none rounded border-2 border-rani" aria-label={t("manualRedactionCanvas")} onPointerDown={(event) => { startRef.current = point(event); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerUp={finish} /><button type="button" className="mt-3 min-h-11 w-full rounded bg-indigo px-3 font-bold text-sand" onClick={() => void canvasToBlob(baseRef.current).then((blob) => onConfirm(blob, count))}>{t("confirmManualRedaction")}</button></div>;
 }

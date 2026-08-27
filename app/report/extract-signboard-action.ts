@@ -80,34 +80,77 @@ async function requestExtraction(imageDataUrl: string, retryInstruction = "") {
     }),
   });
 
-  if (!response.ok) {
-    throw new Error(`School signboard extraction failed with status ${response.status}`);
+  const rawText = await response.text();
+  let rawResponse: unknown = rawText;
+  try {
+    rawResponse = JSON.parse(rawText);
+  } catch {
+    // Keep a non-JSON error body verbatim for browser diagnostics.
   }
-  return outputText(await response.json());
+  if (!response.ok) {
+    return { text: null, rawResponse, ok: false as const, status: response.status };
+  }
+  return { text: outputText(rawResponse), rawResponse, ok: true as const, status: response.status };
 }
 
 export async function extractSchoolSignboard(formData: FormData) {
   const image = formData.get("image");
-  if (!(image instanceof File) || !image.type.startsWith("image/") || image.size > 5_000_000) {
-    throw new Error("Invalid signboard image");
+  if (image instanceof File && image.size > 5_000_000) {
+    return {
+      ok: false as const,
+      failureReason: "server_rejected_size",
+      errorMessage: "Prepared signboard image exceeds the 5 MB server limit",
+      rawResponses: [] as unknown[],
+    };
+  }
+  if (!(image instanceof File) || !image.type.startsWith("image/")) {
+    return {
+      ok: false as const,
+      failureReason: "invalid_image",
+      errorMessage: "Invalid signboard image",
+      rawResponses: [] as unknown[],
+    };
   }
 
   const bytes = Buffer.from(await image.arrayBuffer());
   const imageDataUrl = `data:${image.type};base64,${bytes.toString("base64")}`;
+  const rawResponses: unknown[] = [];
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const text = await requestExtraction(
-      imageDataUrl,
-      attempt === 1 ? "The previous response could not be parsed. Follow the schema exactly. " : "",
-    );
-    try {
-      return extractionSchema.parse(JSON.parse(text ?? ""));
-    } catch (error) {
-      if (attempt === 1) {
-        throw error;
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await requestExtraction(
+        imageDataUrl,
+        attempt === 1 ? "The previous response could not be parsed. Follow the schema exactly. " : "",
+      );
+      rawResponses.push(response.rawResponse);
+      if (!response.ok) {
+        throw new Error(`School signboard extraction failed with status ${response.status}`);
+      }
+      try {
+        return {
+          ok: true as const,
+          extraction: extractionSchema.parse(JSON.parse(response.text ?? "")),
+          rawResponses,
+        };
+      } catch (error) {
+        if (attempt === 1) {
+          throw error;
+        }
       }
     }
+  } catch (error) {
+    return {
+      ok: false as const,
+      failureReason: rawResponses.length > 0 ? "invalid_model_response" : "model_error",
+      errorMessage: error instanceof Error ? error.message : String(error),
+      rawResponses,
+    };
   }
 
-  throw new Error("School signboard response was invalid");
+  return {
+    ok: false as const,
+    failureReason: "invalid_model_response",
+    errorMessage: "School signboard response was invalid",
+    rawResponses,
+  };
 }

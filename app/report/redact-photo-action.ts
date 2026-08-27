@@ -1,6 +1,7 @@
 "use server";
 
 import sharp from "sharp";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 const faceBoxSchema = z.object({
@@ -13,6 +14,8 @@ const faceBoxSchema = z.object({
 const faceDetectionSchema = z.object({
   faces: z.array(faceBoxSchema).max(100),
 });
+
+const MAX_FACE_AREA_RATIO = 0.4;
 
 const openAIResponseSchema = z.object({
   output: z.array(
@@ -83,7 +86,10 @@ async function requestFaceBoxes(imageDataUrl: string, retryInstruction?: string)
           content: [
             {
               type: "input_text",
-              text: `${retryInstruction ?? ""} Locate every visible human face. Return each bounding box using coordinates normalized from 0 to 1000 relative to the full image. Include partially visible faces.`,
+              text: `${retryInstruction ?? ""}
+Locate every visible human face and return a TIGHT box around facial identity only: hairline to chin vertically and ear to ear horizontally. Do not include the neck, shoulders, torso, the whole person, or empty space around the face. Include partially visible faces, but box only the visible facial area.
+
+Use coordinates normalized from 0 to 1000 relative to the full image. Worked example: in a 1000 by 1000 portrait where the face extends from x=350 to x=650 and y=180 to y=530, return {"x":350,"y":180,"width":300,"height":350}. Do not return a larger head-and-torso or whole-person box.`,
             },
             {
               type: "input_image",
@@ -108,10 +114,24 @@ async function detectFaceBoxes(imageDataUrl: string) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const text = await requestFaceBoxes(
       imageDataUrl,
-      attempt === 1 ? "The prior response could not be parsed. Follow the JSON schema exactly." : undefined,
+      attempt === 1
+        ? "The prior response was invalid or a box covered too much of the image. Follow the JSON schema exactly. Every box must cover no more than 40% of the full image, and must be tightly limited to hairline-to-chin and ear-to-ear."
+        : undefined,
     );
     try {
-      return faceDetectionSchema.parse(JSON.parse(text ?? ""));
+      const result = faceDetectionSchema.parse(JSON.parse(text ?? ""));
+      const hasOversizedBox = result.faces.some(
+        (face) => (face.width * face.height) / 1_000_000 > MAX_FACE_AREA_RATIO,
+      );
+
+      if (hasOversizedBox) {
+        if (attempt === 1) {
+          throw new Error("Face bounding box exceeds 40% of the image area");
+        }
+        continue;
+      }
+
+      return result;
     } catch (error) {
       if (attempt === 1) {
         throw error;
@@ -137,8 +157,8 @@ export async function redactPhotoOnServer(formData: FormData) {
   const result = await detectFaceBoxes(imageDataUrl);
   const overlays = await Promise.all(
     result.faces.map(async (face) => {
-      const paddingX = face.width * 0.16;
-      const paddingY = face.height * 0.2;
+      const paddingX = face.width * 0.06;
+      const paddingY = face.height * 0.08;
       const left = Math.min(
         metadata.width - 1,
         Math.max(0, Math.floor(((face.x - paddingX) / 1000) * metadata.width)),
@@ -163,11 +183,20 @@ export async function redactPhotoOnServer(formData: FormData) {
       );
       const pixelsWide = Math.max(1, Math.floor(width / 18));
       const pixelsHigh = Math.max(1, Math.floor(height / 18));
-      const pixelated = await sharp(input)
-        .extract({ left, top, width, height })
+      const originalPatch = await sharp(input).extract({ left, top, width, height }).toBuffer();
+      const downscaled = await sharp(originalPatch)
         .resize(pixelsWide, pixelsHigh)
+        .toBuffer();
+      const pixelated = await sharp(downscaled)
         .resize(width, height, { kernel: "nearest" })
         .toBuffer();
+
+      const originalHash = createHash("sha256").update(originalPatch).digest("hex");
+      const pixelatedHash = createHash("sha256").update(pixelated).digest("hex");
+      if (originalHash === pixelatedHash) {
+        throw new Error("Face pixelation produced an unchanged patch");
+      }
+
       return { input: pixelated, left, top };
     }),
   );

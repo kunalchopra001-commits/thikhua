@@ -1,15 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useLocation } from "../location-context";
-import { supabase } from "../../lib/db";
-import type { School } from "../../lib/db";
+import { getOpenIssuesBySchool, getReportsByIssueIds, supabase } from "../../lib/db";
+import type { Issue, School } from "../../lib/db";
 import { t } from "../../lib/i18n";
+import { processReport } from "../actions/process-report";
+import { submitProcessedReport } from "../actions/submit-report";
 import { useReportForm } from "./report-context";
 import type { ReportStep } from "./report-context";
 import { PhotoRedaction } from "./photo-redaction";
 
 const stepNames = [t("stepPhoto"), t("stepSchool"), t("stepDescribe")];
+type ProcessedReport = Extract<Awaited<ReturnType<typeof processReport>>, { ok: true }>;
+type SubmissionPhase = "transcribing" | "understanding" | "routing" | "saving" | null;
+type DuplicateCandidate = { issue: Issue; defect: string };
 
 function useObjectUrl(value: Blob | File | null) {
   const [url, setUrl] = useState<string | null>(null);
@@ -72,6 +78,7 @@ function nameSimilarity(left: string, right: string) {
 }
 
 export function ReportFlow() {
+  const router = useRouter();
   const { state, updateState } = useReportForm();
   const { coordinates, setCoordinates } = useLocation();
   const [schools, setSchools] = useState<School[]>([]);
@@ -80,6 +87,15 @@ export function ReportFlow() {
   const [locationUnavailable, setLocationUnavailable] = useState(false);
   const [search, setSearch] = useState("");
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [submissionPhase, setSubmissionPhase] = useState<SubmissionPhase>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [processedReport, setProcessedReport] = useState<ProcessedReport | null>(null);
+  const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
+  const [duplicateChoiceReady, setDuplicateChoiceReady] = useState(false);
+  const [duplicateCheckComplete, setDuplicateCheckComplete] = useState(false);
+  const [persistenceTarget, setPersistenceTarget] = useState<string | null>(null);
+  const submissionIdRef = useRef<string | null>(null);
+  const submissionProgressTimerRef = useRef<number | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -137,6 +153,9 @@ export function ReportFlow() {
       mountedRef.current = false;
       if (timerRef.current !== null) {
         window.clearInterval(timerRef.current);
+      }
+      if (submissionProgressTimerRef.current !== null) {
+        window.clearTimeout(submissionProgressTimerRef.current);
       }
       if (recorderRef.current?.state === "recording") {
         recorderRef.current.stop();
@@ -262,12 +281,148 @@ export function ReportFlow() {
       (Boolean(state.description.trim()) || Boolean(state.audio)));
 
   function goBack() {
+    if (state.step === 4) resetSubmissionResult();
     updateState({ step: (state.step === 4 ? 3 : Math.max(1, state.step - 1)) as ReportStep });
   }
 
   function goNext() {
     if (canContinue && state.step < 4) {
       updateState({ step: (state.step + 1) as ReportStep });
+    }
+  }
+
+  function resetSubmissionResult() {
+    setProcessedReport(null);
+    setDuplicateCandidates([]);
+    setDuplicateChoiceReady(false);
+    setDuplicateCheckComplete(false);
+    setPersistenceTarget(null);
+    setSubmissionError(null);
+    submissionIdRef.current = null;
+  }
+
+  function editStep(step: ReportStep) {
+    resetSubmissionResult();
+    updateState({ step });
+  }
+
+  async function persistReport(result: ProcessedReport, existingIssueId: string | null) {
+    if (!state.school) return;
+    setSubmissionError(null);
+    setSubmissionPhase("saving");
+    setPersistenceTarget(existingIssueId);
+    submissionIdRef.current ??= crypto.randomUUID();
+
+    const record = result.record;
+    const persistableRecord = {
+      school_id: record.school_id,
+      detected_language: record.detected_language,
+      text_original: record.text_original,
+      text_hindi: record.text_hindi,
+      text_english_official: record.text_english_official,
+      category: record.category,
+      severity: record.severity,
+      severity_reasoning: record.severity_reasoning,
+      rte_entitlement_violated: record.rte_entitlement_violated,
+      estimated_scale: record.estimated_scale,
+      location_within_premises: record.location_within_premises,
+      grievance_authority: record.grievance_authority,
+      execution_authority: record.execution_authority,
+      funding_pathway: record.funding_pathway,
+      statutory_limit_days: record.statutory_limit_days,
+    };
+    const formData = new FormData();
+    formData.set("submission_id", submissionIdRef.current);
+    formData.set("processed_record", JSON.stringify(persistableRecord));
+    formData.set("capture_provenance", state.photos[0].captureProvenance);
+    if (existingIssueId) formData.set("existing_issue_id", existingIssueId);
+    state.photos.forEach((photo, index) => {
+      if (photo.photo) formData.append("photos", photo.photo, `redacted-${index + 1}.jpg`);
+    });
+
+    const submission = await submitProcessedReport(formData);
+    if (!submission.ok) {
+      setSubmissionPhase(null);
+      setSubmissionError(submission.error);
+      return;
+    }
+    router.push(`/receipt/${submission.code}`);
+  }
+
+  async function beginSubmission() {
+    if (!state.school) return;
+    if (processedReport) {
+      if (duplicateCheckComplete) {
+        await persistReport(processedReport, persistenceTarget);
+      } else {
+        await checkDuplicatesAndPersist(processedReport);
+      }
+      return;
+    }
+
+    setSubmissionError(null);
+    setDuplicateChoiceReady(false);
+    setSubmissionPhase(state.audio ? "transcribing" : "understanding");
+    if (state.audio) {
+      submissionProgressTimerRef.current = window.setTimeout(
+        () => setSubmissionPhase("understanding"),
+        4000,
+      );
+    }
+
+    const formData = new FormData();
+    formData.set("school_id", state.school.id);
+    if (state.description.trim()) formData.set("text", state.description.trim());
+    if (state.audio) {
+      formData.set("audio", state.audio, "voice-note.webm");
+    }
+    state.photos.forEach((photo, index) => {
+      if (photo.photo) formData.append("photos", photo.photo, `redacted-${index + 1}.jpg`);
+    });
+
+    const result = await processReport(formData);
+    if (submissionProgressTimerRef.current !== null) {
+      window.clearTimeout(submissionProgressTimerRef.current);
+      submissionProgressTimerRef.current = null;
+    }
+    if (!result.ok) {
+      setSubmissionPhase(null);
+      setSubmissionError(result.error);
+      return;
+    }
+
+    setProcessedReport(result);
+    await checkDuplicatesAndPersist(result);
+  }
+
+  async function checkDuplicatesAndPersist(result: ProcessedReport) {
+    if (!state.school) return;
+    setSubmissionPhase("routing");
+    try {
+      const issues = await getOpenIssuesBySchool(state.school.id, result.record.category);
+      const reports = await getReportsByIssueIds(issues.map((issue) => issue.id));
+      const firstReportByIssue = new Map<string, string>();
+      reports.forEach((report) => {
+        if (!firstReportByIssue.has(report.issue_id)) {
+          firstReportByIssue.set(report.issue_id, report.text_english_official);
+        }
+      });
+      const candidates = issues.map((issue) => ({
+        issue,
+        defect: firstReportByIssue.get(issue.id) ?? issue.severity_reasoning,
+      }));
+      setDuplicateCandidates(candidates);
+      setDuplicateCheckComplete(true);
+      setDuplicateChoiceReady(candidates.length > 0);
+      if (candidates.length > 0) {
+        setSubmissionPhase(null);
+        return;
+      }
+      await persistReport(result, null);
+    } catch (error) {
+      setDuplicateCheckComplete(false);
+      setSubmissionPhase(null);
+      setSubmissionError(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -508,7 +663,7 @@ export function ReportFlow() {
 
           {state.step === 4 && (
             <section className="space-y-6">
-              <SummarySection title={t("summarySchool")} editLabel={t("editSchool")} onEdit={() => updateState({ step: 2 })}>
+              <SummarySection title={t("summarySchool")} editLabel={t("editSchool")} onEdit={() => editStep(2)}>
                 {state.school && (
                   <div>
                     <p className="font-bold">{state.school.name_en}</p>
@@ -517,7 +672,7 @@ export function ReportFlow() {
                   </div>
                 )}
               </SummarySection>
-              <SummarySection title={t("summaryDescription")} editLabel={t("editDescription")} onEdit={() => updateState({ step: 3 })}>
+              <SummarySection title={t("summaryDescription")} editLabel={t("editDescription")} onEdit={() => editStep(3)}>
                 <p className="whitespace-pre-wrap">
                   {state.description.trim() || t("noWrittenDescription")}
                 </p>
@@ -535,6 +690,68 @@ export function ReportFlow() {
                   <p className="mt-2">{t("noVoiceRecording")}</p>
                 )}
               </div>
+
+              {submissionPhase && <SubmissionProgress phase={submissionPhase} hasAudio={Boolean(state.audio)} />}
+
+              {duplicateChoiceReady && processedReport && (
+                <section className="border-t-2 border-indigo pt-5" aria-labelledby="duplicate-heading">
+                  <h2 id="duplicate-heading" className="text-xl font-bold text-indigo">
+                    {t("duplicateHeading")}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6">{t("duplicateHelp")}</p>
+                  <div className="mt-4 grid gap-4">
+                    {duplicateCandidates.map(({ issue, defect }) => (
+                      <article key={issue.id} className="rounded border-2 border-ochre p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-mono text-lg font-bold text-indigo">{issue.code}</span>
+                          <span className="rounded-full border-2 border-ochre px-2 py-1 text-xs font-bold">
+                            {issue.severity}
+                          </span>
+                        </div>
+                        <p className="mt-3 leading-6">{defect}</p>
+                        <p className="mt-2 text-sm">
+                          {t("duplicateAge", {
+                            days: Math.max(
+                              0,
+                              Math.floor((Date.now() - new Date(issue.created_at).getTime()) / 86_400_000),
+                            ),
+                          })}
+                        </p>
+                        <button
+                          type="button"
+                          className="mt-4 min-h-12 w-full rounded bg-indigo px-4 py-3 font-bold text-sand disabled:opacity-50"
+                          disabled={Boolean(submissionPhase)}
+                          onClick={() => void persistReport(processedReport, issue.id)}
+                        >
+                          {t("corroborateIssue")}
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-4 min-h-12 w-full rounded border-2 border-rani px-4 py-3 font-bold disabled:opacity-50"
+                    disabled={Boolean(submissionPhase)}
+                    onClick={() => void persistReport(processedReport, null)}
+                  >
+                    {t("continueNewIssue")}
+                  </button>
+                </section>
+              )}
+
+              {submissionError && (
+                <div className="border-l-4 border-rani bg-rani/10 p-4" role="alert">
+                  <p className="font-bold">{t("submissionFailed")}</p>
+                  <p className="mt-1 text-sm">{submissionError}</p>
+                  <button
+                    type="button"
+                    className="mt-3 min-h-11 rounded border-2 border-indigo px-4 py-2 font-bold"
+                    onClick={() => void beginSubmission()}
+                  >
+                    {t("retrySubmission")}
+                  </button>
+                </div>
+              )}
             </section>
           )}
         </div>
@@ -559,11 +776,12 @@ export function ReportFlow() {
               {state.step === 3 ? t("review") : t("next")}
             </button>
           )}
-          {state.step === 4 && (
+          {state.step === 4 && !duplicateChoiceReady && (
             <button
               type="button"
               className="min-h-12 flex-1 rounded bg-rani px-5 py-3 font-bold text-sand disabled:cursor-not-allowed disabled:opacity-50"
               disabled={
+                Boolean(submissionPhase) ||
                 !state.photos.every(
                   (photo) => photo.status === "automatic" || photo.status === "manual_confirmed",
                 ) ||
@@ -573,8 +791,11 @@ export function ReportFlow() {
                     state.signboardPhoto.status !== "manual_confirmed",
                 )
               }
+              onClick={() => void beginSubmission()}
             >
-              {state.photos.some((photo) => photo.status === "processing") ||
+              {submissionPhase
+                ? t("submissionSaving")
+                : state.photos.some((photo) => photo.status === "processing") ||
               state.signboardPhoto?.status === "processing"
                 ? t("processingPhoto")
                 : t("submitReport")}
@@ -583,6 +804,38 @@ export function ReportFlow() {
         </nav>
       </div>
     </main>
+  );
+}
+
+function SubmissionProgress({ phase, hasAudio }: { phase: SubmissionPhase; hasAudio: boolean }) {
+  const stages = [
+    ...(hasAudio
+      ? [{ id: "transcribing" as const, label: t("submissionTranscribing") }]
+      : []),
+    { id: "understanding" as const, label: t("submissionUnderstanding") },
+    { id: "routing" as const, label: t("submissionRouting") },
+    { id: "saving" as const, label: t("submissionSaving") },
+  ];
+  const currentIndex = stages.findIndex((stage) => stage.id === phase);
+
+  return (
+    <section className="border-l-4 border-indigo bg-indigo/10 p-4" aria-live="polite">
+      <ol className="space-y-3">
+        {stages.map((stage, index) => (
+          <li key={stage.id} className="flex items-center gap-3">
+            <span
+              className={`size-3 shrink-0 rounded-full border-2 border-indigo ${
+                index <= currentIndex ? "bg-indigo" : "bg-sand"
+              } ${index === currentIndex ? "motion-safe:animate-pulse" : ""}`}
+              aria-hidden="true"
+            />
+            <span className={index === currentIndex ? "font-bold text-indigo" : "text-charcoal"}>
+              {stage.label}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

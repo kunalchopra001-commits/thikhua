@@ -179,3 +179,13 @@ $$;
 
 revoke all on function public.reset_seed_data(uuid[], uuid[], uuid[], uuid[]) from public;
 grant execute on function public.reset_seed_data(uuid[], uuid[], uuid[], uuid[]) to service_role;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'report-photos',
+  'report-photos',
+  true,
+  5000000,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do nothing;

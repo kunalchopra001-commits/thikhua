@@ -25,3 +25,24 @@
 body {
   margin: 0;
 }
+
+@keyframes receipt-mark-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.receipt-mark {
+  animation: receipt-mark-enter 600ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .receipt-mark {
+    animation: none;
+  }
+}

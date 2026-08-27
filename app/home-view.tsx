@@ -309,11 +309,16 @@ export function HomeView({ blocks }: HomeViewProps) {
                           <h3 className="font-bold text-indigo group-hover:underline">
                             {issue.schoolName}
                           </h3>
-                          <span
-                            className={`shrink-0 rounded-full border-2 px-2.5 py-1 text-xs font-bold ${severityClasses[issue.severity]}`}
-                          >
-                            {issue.severity}
-                          </span>
+                          <div className="flex shrink-0 flex-col items-end gap-1.5">
+                            <span className="rounded-full border border-stone px-2 py-1 text-xs font-bold text-charcoal">
+                              {t("inProgressMarker")}
+                            </span>
+                            <span
+                              className={`rounded-full border-2 px-2.5 py-1 text-xs font-bold ${severityClasses[issue.severity]}`}
+                            >
+                              {issue.severity}
+                            </span>
+                          </div>
                         </div>
                         <p className="mt-3 leading-6">{issue.defect}</p>
                         <p className="mt-4 text-sm font-semibold">

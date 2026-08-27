@@ -176,14 +176,29 @@ export async function getIssueByCode(code: string) {
   return unwrap(data, error);
 }
 
-export async function getOpenIssuesBySchool(schoolId: string) {
-  const { data, error } = await supabase
+export async function getOpenIssuesBySchool(schoolId: string, category?: string) {
+  let query = supabase
     .from("issues")
     .select("*")
     .eq("school_id", schoolId)
-    .in("status", ["submitted", "in_progress", "overdue", "unfunded"])
-    .order("created_at", { ascending: false });
+    .in("status", ["submitted", "in_progress", "overdue", "unfunded"]);
 
+  if (category) {
+    query = query.eq("category", category);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
+
+  return unwrap(data, error);
+}
+
+export async function getReportsByIssueIds(issueIds: string[]) {
+  if (issueIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("reports")
+    .select("*")
+    .in("issue_id", issueIds)
+    .order("created_at", { ascending: true });
   return unwrap(data, error);
 }
 

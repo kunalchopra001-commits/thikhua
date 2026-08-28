@@ -39,6 +39,14 @@ export default function About() {
           <h2 id="retention" className="text-xl font-black tracking-wide text-indigo">{t("aboutRetention")}</h2>
           <p className="mt-3 leading-7">{t("aboutRetentionBody")}</p>
         </section>
+        <p className="border-t border-stone pt-6 leading-7">
+          <a
+            href="https://github.com/kunalchopra001-commits/thikhua/blob/main/BUILD-LOG.md"
+            className="font-bold text-indigo underline decoration-ochre decoration-2 underline-offset-4"
+          >
+            {t("aboutBuildLog")}
+          </a>
+        </p>
         </div>
       </div>
     </main>

@@ -46,6 +46,18 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <LanguageSwitcher language={language} />
             <nav className="flex w-full items-center justify-between gap-1 sm:ml-auto sm:w-auto sm:justify-start sm:gap-2">
               <Link
+                href="/about"
+                className="flex min-h-11 items-center px-2 py-2 text-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+              >
+                {t("aboutNav")}
+              </Link>
+              <Link
+                href="/research"
+                className="flex min-h-11 items-center px-2 py-2 text-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+              >
+                {t("researchNav")}
+              </Link>
+              <Link
                 href="/track"
                 className="flex min-h-11 items-center rounded border border-sand px-3 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
               >

@@ -28,7 +28,6 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
               >
                 <span className="sm:hidden">{t("trackIssueShort")}</span>
                 <span className="hidden sm:inline">{t("trackIssue")}</span>
-                <span className="ml-1 hidden rounded-full border border-stone px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide sm:inline">{t("inProgressMarker")}</span>
               </Link>
               <WorkInProgressPanel />
               <Link

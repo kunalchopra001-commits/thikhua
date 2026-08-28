@@ -354,7 +354,7 @@ const ISSUE_DRAFTS: IssueDraft[] = [
     status: "resolved",
     age_days: 70,
     resolved_days_ago: 9,
-    resolution_photo_url: "/placeholder/resolution-leak-repaired.jpg",
+    resolution_photo_url: "/placeholder/resolution-leak-repaired.svg",
   },
   {
     id: "20000000-0000-4000-8000-000000000009",
@@ -369,7 +369,7 @@ const ISSUE_DRAFTS: IssueDraft[] = [
     status: "resolved",
     age_days: 54,
     resolved_days_ago: 4,
-    resolution_photo_url: "/placeholder/resolution-stair-repaired.jpg",
+    resolution_photo_url: "/placeholder/resolution-stair-repaired.svg",
   },
 ];
 
@@ -469,8 +469,8 @@ export const REPORTS: ReportInsert[] = ISSUE_DRAFTS.map((issue, index) => ({
   text_hindi: REPORT_TEXTS[index].hindi,
   text_english_official: REPORT_TEXTS[index].english,
   detected_language: "kn",
-  photo_url: `/placeholder/issue-${issue.code.toLowerCase()}.jpg`,
-  photo_urls: [`/placeholder/issue-${issue.code.toLowerCase()}.jpg`],
+  photo_url: `/placeholder/issue-${issue.code.toLowerCase()}.svg`,
+  photo_urls: [`/placeholder/issue-${issue.code.toLowerCase()}.svg`],
   reporter_mode: "anonymous" satisfies ReporterMode,
   reporter_name: null,
   reporter_contact: null,

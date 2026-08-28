@@ -27,14 +27,9 @@ function uniquePhotoUrls(reports: { photo_url: string; photo_urls: string[] }[])
 }
 
 function ReportPhoto({ url, index }: { url: string; index: number }) {
-  if (url.startsWith("/placeholder/")) {
-    return (
-      <div className="grid aspect-[4/3] place-items-center rounded border-2 border-dashed border-stone bg-sand p-5 text-center text-sm font-semibold">
-        {t("issuePhotoPlaceholder", { number: index + 1 })}
-      </div>
-    );
-  }
-  return <img src={url} alt={t("issuePhotoAlt", { number: index + 1 })} className="h-auto w-full rounded border-2 border-stone object-contain" />;
+  const isSeedIllustration = url.startsWith("/placeholder/");
+  const imageUrl = isSeedIllustration ? url.replace(/\.jpg$/i, ".svg") : url;
+  return <img src={imageUrl} alt={t(isSeedIllustration ? "issueSeedPhotoAlt" : "issuePhotoAlt", { number: index + 1 })} className="h-auto w-full rounded border-2 border-stone object-contain" />;
 }
 
 export default async function IssuePage({ params }: { params: Promise<{ code: string }> }) {

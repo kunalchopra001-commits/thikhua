@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { getIssueByCode, supabase } from "../../../lib/db";
 import type { StatusEventType } from "../../../lib/db";
-import { t } from "../../../lib/i18n";
+import { isLanguage, t } from "../../../lib/i18n";
 import { IssueClock } from "./issue-clock";
 import { ReopenButton } from "./reopen-button";
 
@@ -34,6 +35,8 @@ function ReportPhoto({ url, index }: { url: string; index: number }) {
 
 export default async function IssuePage({ params }: { params: Promise<{ code: string }> }) {
   const { code: rawCode } = await params;
+  const cookieLanguage = (await cookies()).get("thikhua-language")?.value;
+  const language = isLanguage(cookieLanguage) ? cookieLanguage : "en";
   const issue = await getIssueByCode(rawCode.toUpperCase());
   if (!issue) notFound();
 
@@ -71,7 +74,9 @@ export default async function IssuePage({ params }: { params: Promise<{ code: st
             <h2 id="defect-heading" className="text-2xl font-bold text-indigo">{t("issueDefect")}</h2>
             <span className={`rounded-full border-2 px-3 py-2 text-sm font-black ${severityClasses[issue.severity]}`}>{issue.severity}</span>
           </div>
-          <p className="mt-4 text-lg leading-7">{reports[0].text_english_official}</p>
+          <p className="mt-4 text-lg leading-7" lang={language}>
+            {language === "kn" ? reports[0].text_original : language === "hi" ? reports[0].text_hindi : reports[0].text_english_official}
+          </p>
           <div className="mt-5 border-l-4 border-ochre p-4">
             <p className="text-sm font-black uppercase tracking-wide">{t("issueSeverityProvisional")}</p>
             <p className="mt-2 leading-6">{issue.severity_reasoning}</p>

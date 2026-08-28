@@ -24,6 +24,7 @@
 
 body {
   margin: 0;
+  font-family: var(--font-devanagari), var(--font-kannada), system-ui, sans-serif;
 }
 
 @keyframes receipt-mark-enter {

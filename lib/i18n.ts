@@ -1,4 +1,4 @@
-const strings = {
+export const englishStrings = {
   siteName: "ThikHua",
   siteDescription: "A public accountability ledger for school infrastructure repair.",
   trackIssue: "Track a report",
@@ -10,6 +10,7 @@ const strings = {
   trackCodePlaceholder: "T5DBMQ",
   trackSubmit: "Open public issue",
   startReport: "Report issue",
+  languageSwitcherLabel: "Language",
   whatIsThis: "What is this?",
   closeContextPanel: "Close explanation",
   contextPanelTitle: "About this work in progress",
@@ -253,11 +254,94 @@ const strings = {
   aboutRetentionBody: "Raw photos with EXIF are never stored. On-device redaction is preferred. If the server fallback is needed, the unprocessed image is held in memory only. Only the redacted image is persisted. Precise coordinates reduce to block level after school confirmation, and reporter contact is erased after closure and the appeal window.",
 } as const;
 
-export type StringKey = keyof typeof strings;
+export type StringKey = keyof typeof englishStrings;
+export type Language = "en" | "hi" | "kn";
+
+export const languageLabels: Record<Language, string> = {
+  en: "English",
+  hi: "हिन्दी",
+  kn: "ಕನ್ನಡ",
+};
+
+const hindiStrings: Partial<Record<StringKey, string>> = {
+  siteName: "ठीक हुआ",
+  siteDescription: "विद्यालय के बुनियादी ढाँचे की मरम्मत के लिए सार्वजनिक जवाबदेही रजिस्टर।",
+  trackIssue: "रिपोर्ट ट्रैक करें", trackIssueShort: "ट्रैक करें", startReport: "समस्या दर्ज करें",
+  languageSwitcherLabel: "भाषा",
+  whatIsThis: "यह क्या है?", closeContextPanel: "जानकारी बंद करें", contextPanelTitle: "इस प्रगति पर काम के बारे में",
+  contextProblemHeading: "समस्या", contextResearchHeading: "शोध में क्या मिला", contextWorkingHeading: "अभी क्या काम करता है", contextNextHeading: "आगे",
+  prototypeBanner: "प्रोटोटाइप। विभागीय खाते और सरकारी प्रेषण सिम्युलेट किए गए हैं।", dismissBanner: "प्रोटोटाइप सूचना हटाएँ",
+  prototypeFooter: "Build What Moves India के लिए Codex के साथ दो दिनों में बनाया गया प्रोटोटाइप।",
+  locating: "आपका निकटतम ब्लॉक खोज रहे हैं…", chooseBlock: "ब्लॉक चुनें", changeBlock: "दूसरा ब्लॉक देखें",
+  schoolsAndEnrollment: "{schools} विद्यालय · {enrolment} विद्यार्थी", severitySummary: "गंभीरता के अनुसार खुली रिपोर्टें", severityCount: "{severity}: {count}",
+  openIssues: "खुली रिपोर्टें", loadingIssues: "रिपोर्टें लोड हो रही हैं…", loadError: "रिपोर्टें लोड नहीं हो सकीं। पुनः प्रयास के लिए ब्लॉक चुनें।",
+  daysElapsed: "{days} दिन", unfunded: "वित्तपोषण नहीं — वर्तमान AWP&B में नहीं", unfundedExplanation: "वार्षिक बजट चक्र के कारण रुका हुआ",
+  emptyBlock: "अभी कोई रिपोर्ट नहीं — अपने विद्यालय की जाँच करने वाले पहले व्यक्ति बनें", reportIssue: "अपने विद्यालय की जाँच करें", viewIssue: "{school} की रिपोर्ट देखें",
+  trackAnonymous: "गुमनाम फॉलो-अप", trackTitle: "अपनी रिपोर्ट ट्रैक करें", trackHelp: "रसीद पर दिया छह-अक्षर शिकायत कोड दर्ज करें। किसी खाते या व्यक्तिगत जानकारी की आवश्यकता नहीं है।",
+  trackCodeLabel: "शिकायत कोड", trackCodePlaceholder: "T5DBMQ", trackSubmit: "सार्वजनिक समस्या खोलें",
+  issueBlock: "{block} ब्लॉक · {district}", issueClockLabel: "वैधानिक उत्तर सीमा के मुकाबले बीता समय", issueClockStatutory: "दिन {day} · RTE के तहत वैधानिक सीमा: {limit} दिन", issueClockElapsed: "{days}दि {hours}घं {minutes}मि {seconds}से बीते",
+  issueUnfundedTitle: "वार्षिक बजट चक्र के कारण रुका", issueUnfundedBody: "यह कार्य वार्षिक कार्य योजना एवं बजट (AWP&B) में शामिल होने तक रुका है। शिकायत प्राप्त हो चुकी है, लेकिन वर्तमान योजना में मरम्मत हेतु धन उपलब्ध नहीं है।",
+  issueDefect: "दर्ज खराबी", issueSeverityProvisional: "गंभीरता · निरीक्षण तक अस्थायी", issuePhotos: "चेहरे छिपाए गए रिपोर्ट फोटो", issuePhotoAlt: "चेहरे छिपाया गया रिपोर्ट फोटो {number}", issueSeedPhotoAlt: "उदाहरण बीज चित्र {number}; कोई वास्तविक विद्यालय नहीं दिखाया गया",
+  issueWhoAnswers: "कौन प्राप्त करता है — और कौन ठीक कर सकता है", issueGrievanceAuthority: "शिकायत प्राधिकारी", issueExecutionAuthority: "क्रियान्वयन प्राधिकारी", issueFundingPathway: "वित्तपोषण मार्ग",
+  issueResolution: "प्रकाशित मरम्मत फोटो", issueNotFixed: "यह ठीक नहीं हुआ", issueReopening: "रिपोर्ट जोड़ रहे हैं…", issueReopened: "समस्या सार्वजनिक रजिस्टर में फिर खोली गई है।", issueAlreadyReopened: "एक नागरिक ने बताया है कि यह समस्या ठीक नहीं हुई।", issueReopenFailed: "समस्या फिर नहीं खोली जा सकी। पुनः प्रयास करें।",
+  issueTimeline: "सार्वजनिक स्थिति इतिहास", issueTimelineAppendOnly: "यह केवल-जोड़ रजिस्टर है: पुरानी प्रविष्टियाँ बदली या हटाई नहीं जा सकतीं।",
+  eventSubmitted: "प्रस्तुत", eventCorroborated: "पुष्टि की गई", eventAcknowledged: "स्वीकार किया गया", eventInspectionOrdered: "निरीक्षण आदेशित", eventMarkedUnfunded: "वित्तपोषण-विहीन चिह्नित", eventResolved: "समाधान हुआ", eventReopened: "फिर खोला गया",
+  issueNotFoundTitle: "समस्या नहीं मिली", issueNotFoundBody: "इस शिकायत कोड से कोई सार्वजनिक समस्या नहीं मिली। कोड जाँचकर पुनः प्रयास करें।", issueBackHome: "ब्लॉक रजिस्टर पर लौटें",
+  reportTitle: "विद्यालय की समस्या दर्ज करें", reportIntro: "तीन छोटे चरण। अंतिम पुष्टि से पहले कुछ भी प्रस्तुत नहीं होगा।", stepPhoto: "फोटो", stepSchool: "विद्यालय", stepDescribe: "विवरण", back: "पीछे", next: "आगे", review: "समीक्षा",
+  submitReport: "रिपोर्ट प्रस्तुत करें", summaryTitle: "रिपोर्ट सारांश", summaryIntro: "एकत्र जानकारी की समीक्षा करें। अभी कुछ अपलोड या प्रस्तुत नहीं हुआ है।",
+  schoolHeading: "विद्यालय चुनें", schoolHelp: "पुष्टि के लिए विद्यालय पर टैप करें। निकट का विद्यालय स्वतः नहीं चुना जाता।", selectedSchool: "चुना विद्यालय",
+  describeHeading: "समस्या बताएँ", describeHelp: "जो देखा उसे लिखें या रिकॉर्ड करें। किसी भी भाषा का स्वागत है।", describePlaceholder: "नुकसान, स्थान और असुरक्षा का कारण किसी भी भाषा में बताएँ।",
+  aboutTitle: "ठीक हुआ के बारे में", aboutWorksToday: "आज काम करता है", aboutMocked: "सिम्युलेट किया गया", aboutAtScale: "बड़े स्तर पर", aboutRetention: "डेटा संरक्षण", aboutDepartmentDemo: "सिम्युलेटेड विभाग प्रदर्शन खोलें",
+  deptSimulationBanner: "सिम्युलेटेड विभाग दृश्य। कोई वास्तविक प्रमाणीकरण नहीं। केवल प्रदर्शन हेतु।", deptCareHeader: "आपकी निगरानी में — {schools} विद्यालय, {children} बच्चे", deptYourRecord: "आपका कार्य रिकॉर्ड", deptOpenQueue: "खुली दायित्व कतार",
+};
+
+const kannadaStrings: Partial<Record<StringKey, string>> = {
+  siteName: "ಠೀಕ್‌ಹುವಾ",
+  siteDescription: "ಶಾಲಾ ಮೂಲಸೌಕರ್ಯ ದುರಸ್ತಿಗಾಗಿ ಸಾರ್ವಜನಿಕ ಹೊಣೆಗಾರಿಕೆ ದಾಖಲೆ.",
+  trackIssue: "ವರದಿ ಟ್ರ್ಯಾಕ್ ಮಾಡಿ", trackIssueShort: "ಟ್ರ್ಯಾಕ್", startReport: "ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ",
+  languageSwitcherLabel: "ಭಾಷೆ",
+  whatIsThis: "ಇದು ಏನು?", closeContextPanel: "ವಿವರಣೆ ಮುಚ್ಚಿ", contextPanelTitle: "ಪ್ರಗತಿಯಲ್ಲಿರುವ ಈ ಕೆಲಸದ ಕುರಿತು",
+  contextProblemHeading: "ಸಮಸ್ಯೆ", contextResearchHeading: "ಸಂಶೋಧನೆಯಲ್ಲಿ ಕಂಡದ್ದು", contextWorkingHeading: "ಈಗ ಕಾರ್ಯನಿರ್ವಹಿಸುವವು", contextNextHeading: "ಮುಂದೆ",
+  prototypeBanner: "ಮಾದರಿ. ಇಲಾಖೆಯ ಖಾತೆಗಳು ಮತ್ತು ಸರ್ಕಾರಿ ಸಲ್ಲಿಕೆ ಅನುಕರಿಸಲಾಗಿದೆ.", dismissBanner: "ಮಾದರಿ ಸೂಚನೆ ಮುಚ್ಚಿ",
+  prototypeFooter: "Build What Moves India ಗಾಗಿ Codex ಜೊತೆ ಎರಡು ದಿನಗಳಲ್ಲಿ ನಿರ್ಮಿಸಿದ ಮಾದರಿ.",
+  locating: "ನಿಮ್ಮ ಹತ್ತಿರದ ಬ್ಲಾಕ್ ಹುಡುಕಲಾಗುತ್ತಿದೆ…", chooseBlock: "ಬ್ಲಾಕ್ ಆಯ್ಕೆಮಾಡಿ", changeBlock: "ಬೇರೆ ಬ್ಲಾಕ್ ನೋಡಿ",
+  schoolsAndEnrollment: "{schools} ಶಾಲೆಗಳು · {enrolment} ವಿದ್ಯಾರ್ಥಿಗಳು", severitySummary: "ಗಂಭೀರತೆಯ ಪ್ರಕಾರ ತೆರೆದ ವರದಿಗಳು", severityCount: "{severity}: {count}",
+  openIssues: "ತೆರೆದ ವರದಿಗಳು", loadingIssues: "ವರದಿಗಳು ಲೋಡ್ ಆಗುತ್ತಿವೆ…", loadError: "ವರದಿಗಳನ್ನು ಲೋಡ್ ಮಾಡಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಲು ಬ್ಲಾಕ್ ಆಯ್ಕೆಮಾಡಿ.",
+  daysElapsed: "{days} ದಿನಗಳು", unfunded: "ಹಣವಿಲ್ಲ — ಪ್ರಸ್ತುತ AWP&B ಯಲ್ಲಿಲ್ಲ", unfundedExplanation: "ವಾರ್ಷಿಕ ಬಜೆಟ್ ಚಕ್ರದಿಂದ ತಡೆಗೊಂಡಿದೆ",
+  emptyBlock: "ಇನ್ನೂ ವರದಿಗಳಿಲ್ಲ — ನಿಮ್ಮ ಶಾಲೆಯನ್ನು ಪರಿಶೀಲಿಸುವ ಮೊದಲಿಗರಾಗಿ", reportIssue: "ನಿಮ್ಮ ಶಾಲೆ ಪರಿಶೀಲಿಸಿ", viewIssue: "{school} ವರದಿ ನೋಡಿ",
+  trackAnonymous: "ಅನಾಮಧೇಯ ಅನುಸರಣೆ", trackTitle: "ನಿಮ್ಮ ವರದಿಯನ್ನು ಟ್ರ್ಯಾಕ್ ಮಾಡಿ", trackHelp: "ರಸೀದಿಯಲ್ಲಿರುವ ಆರು ಅಕ್ಷರಗಳ ದೂರು ಕೋಡ್ ನಮೂದಿಸಿ. ಖಾತೆ ಅಥವಾ ವೈಯಕ್ತಿಕ ವಿವರಗಳು ಅಗತ್ಯವಿಲ್ಲ.",
+  trackCodeLabel: "ದೂರು ಕೋಡ್", trackCodePlaceholder: "T5DBMQ", trackSubmit: "ಸಾರ್ವಜನಿಕ ಸಮಸ್ಯೆ ತೆರೆಯಿರಿ",
+  issueBlock: "{block} ಬ್ಲಾಕ್ · {district}", issueClockLabel: "ಕಾನೂನುಬದ್ಧ ಪ್ರತಿಕ್ರಿಯೆ ಮಿತಿಗೆ ಹೋಲಿಸಿದ ಕಳೆದ ಸಮಯ", issueClockStatutory: "ದಿನ {day} · RTE ಅಡಿಯಲ್ಲಿ ಕಾನೂನುಬದ್ಧ ಮಿತಿ: {limit} ದಿನಗಳು", issueClockElapsed: "{days}ದಿ {hours}ಗಂ {minutes}ನಿ {seconds}ಸೆ ಕಳೆದಿದೆ",
+  issueUnfundedTitle: "ವಾರ್ಷಿಕ ಬಜೆಟ್ ಚಕ್ರದಿಂದ ತಡೆಗೊಂಡಿದೆ", issueUnfundedBody: "ವಾರ್ಷಿಕ ಕಾರ್ಯಯೋಜನೆ ಮತ್ತು ಬಜೆಟ್ (AWP&B) ನಲ್ಲಿ ಸೇರಿಸುವವರೆಗೆ ಈ ಕೆಲಸ ತಡೆಗೊಂಡಿದೆ. ದೂರು ಸ್ವೀಕರಿಸಲಾಗಿದೆ, ಆದರೆ ಪ್ರಸ್ತುತ ಯೋಜನೆಯಲ್ಲಿ ದುರಸ್ತಿಗೆ ಹಣ ಲಭ್ಯವಿಲ್ಲ.",
+  issueDefect: "ವರದಿಯಾದ ದೋಷ", issueSeverityProvisional: "ಗಂಭೀರತೆ · ಪರಿಶೀಲನೆಯವರೆಗೆ ತಾತ್ಕಾಲಿಕ", issuePhotos: "ಮುಖ ಮರೆಮಾಡಿದ ವರದಿ ಚಿತ್ರಗಳು", issuePhotoAlt: "ಮುಖ ಮರೆಮಾಡಿದ ವರದಿ ಚಿತ್ರ {number}", issueSeedPhotoAlt: "ವಿವರಣಾತ್ಮಕ ಬೀಜ ಚಿತ್ರ {number}; ಯಾವುದೇ ನೈಜ ಶಾಲೆಯನ್ನು ತೋರಿಸಲಾಗಿಲ್ಲ",
+  issueWhoAnswers: "ಯಾರು ಸ್ವೀಕರಿಸುತ್ತಾರೆ — ಯಾರು ಸರಿಪಡಿಸಬಹುದು", issueGrievanceAuthority: "ದೂರು ಪ್ರಾಧಿಕಾರ", issueExecutionAuthority: "ಕಾರ್ಯಗತಗೊಳಿಸುವ ಪ್ರಾಧಿಕಾರ", issueFundingPathway: "ಹಣಕಾಸಿನ ಮಾರ್ಗ",
+  issueResolution: "ಪ್ರಕಟಿತ ದುರಸ್ತಿ ಚಿತ್ರ", issueNotFixed: "ಇದು ಸರಿಯಾಗಿಲ್ಲ", issueReopening: "ವರದಿ ಸೇರಿಸಲಾಗುತ್ತಿದೆ…", issueReopened: "ಸಮಸ್ಯೆಯನ್ನು ಸಾರ್ವಜನಿಕ ದಾಖಲೆಯಲ್ಲಿ ಮರುತೆರೆಯಲಾಗಿದೆ.", issueAlreadyReopened: "ಈ ಸಮಸ್ಯೆ ಸರಿಯಾಗಿಲ್ಲ ಎಂದು ನಾಗರಿಕರು ತಿಳಿಸಿದ್ದಾರೆ.", issueReopenFailed: "ಸಮಸ್ಯೆಯನ್ನು ಮರುತೆರೆಯಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
+  issueTimeline: "ಸಾರ್ವಜನಿಕ ಸ್ಥಿತಿ ಇತಿಹಾಸ", issueTimelineAppendOnly: "ಇದು ಸೇರಿಸುವುದಕ್ಕೆ ಮಾತ್ರ ಇರುವ ದಾಖಲೆ: ಹಿಂದಿನ ನಮೂದುಗಳನ್ನು ಬದಲಾಯಿಸಲು ಅಥವಾ ಅಳಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ.",
+  eventSubmitted: "ಸಲ್ಲಿಸಲಾಗಿದೆ", eventCorroborated: "ದೃಢೀಕರಿಸಲಾಗಿದೆ", eventAcknowledged: "ಸ್ವೀಕರಿಸಲಾಗಿದೆ", eventInspectionOrdered: "ಪರಿಶೀಲನೆಗೆ ಆದೇಶ", eventMarkedUnfunded: "ಹಣವಿಲ್ಲವೆಂದು ಗುರುತಿಸಲಾಗಿದೆ", eventResolved: "ಪರಿಹರಿಸಲಾಗಿದೆ", eventReopened: "ಮರುತೆರೆಯಲಾಗಿದೆ",
+  issueNotFoundTitle: "ಸಮಸ್ಯೆ ಕಂಡುಬಂದಿಲ್ಲ", issueNotFoundBody: "ಈ ದೂರು ಕೋಡ್‌ಗೆ ಹೊಂದುವ ಸಾರ್ವಜನಿಕ ಸಮಸ್ಯೆ ಇಲ್ಲ. ಕೋಡ್ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", issueBackHome: "ಬ್ಲಾಕ್ ದಾಖಲೆಗೆ ಹಿಂದಿರುಗಿ",
+  reportTitle: "ಶಾಲೆಯ ಸಮಸ್ಯೆ ವರದಿ ಮಾಡಿ", reportIntro: "ಮೂರು ಸಣ್ಣ ಹಂತಗಳು. ಅಂತಿಮ ದೃಢೀಕರಣದವರೆಗೆ ಏನನ್ನೂ ಸಲ್ಲಿಸಲಾಗುವುದಿಲ್ಲ.", stepPhoto: "ಚಿತ್ರ", stepSchool: "ಶಾಲೆ", stepDescribe: "ವಿವರಿಸಿ", back: "ಹಿಂದೆ", next: "ಮುಂದೆ", review: "ಪರಿಶೀಲಿಸಿ",
+  submitReport: "ವರದಿ ಸಲ್ಲಿಸಿ", summaryTitle: "ವರದಿ ಸಾರಾಂಶ", summaryIntro: "ಸಂಗ್ರಹಿಸಿದ ಮಾಹಿತಿಯನ್ನು ಪರಿಶೀಲಿಸಿ. ಇನ್ನೂ ಏನನ್ನೂ ಅಪ್‌ಲೋಡ್ ಅಥವಾ ಸಲ್ಲಿಸಲಾಗಿಲ್ಲ.",
+  schoolHeading: "ಶಾಲೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ", schoolHelp: "ದೃಢೀಕರಿಸಲು ಶಾಲೆಯನ್ನು ಟ್ಯಾಪ್ ಮಾಡಿ. ಹತ್ತಿರದ ಶಾಲೆ ಸ್ವಯಂಚಾಲಿತವಾಗಿ ಆಯ್ಕೆಯಾಗುವುದಿಲ್ಲ.", selectedSchool: "ಆಯ್ದ ಶಾಲೆ",
+  describeHeading: "ಸಮಸ್ಯೆಯನ್ನು ವಿವರಿಸಿ", describeHelp: "ನೀವು ಕಂಡದ್ದನ್ನು ಬರೆಯಿರಿ ಅಥವಾ ಧ್ವನಿಮುದ್ರಿಸಿ. ಯಾವುದೇ ಭಾಷೆಗೆ ಸ್ವಾಗತ.", describePlaceholder: "ಹಾನಿ, ಸ್ಥಳ ಮತ್ತು ಅದು ಏಕೆ ಅಸುರಕ್ಷಿತ ಎಂಬುದನ್ನು ಯಾವುದೇ ಭಾಷೆಯಲ್ಲಿ ವಿವರಿಸಿ.",
+  aboutTitle: "ಠೀಕ್‌ಹುವಾ ಕುರಿತು", aboutWorksToday: "ಇಂದು ಕೆಲಸ ಮಾಡುವವು", aboutMocked: "ಅನುಕರಿಸಲಾಗಿದೆ", aboutAtScale: "ದೊಡ್ಡ ಪ್ರಮಾಣದಲ್ಲಿ", aboutRetention: "ಮಾಹಿತಿ ಉಳಿಕೆ", aboutDepartmentDemo: "ಅನುಕರಿಸಿದ ಇಲಾಖೆ ಪ್ರದರ್ಶನ ತೆರೆಯಿರಿ",
+  deptSimulationBanner: "ಅನುಕರಿಸಿದ ಇಲಾಖೆ ನೋಟ. ನೈಜ ದೃಢೀಕರಣ ಇಲ್ಲ. ಪ್ರದರ್ಶನಕ್ಕಾಗಿ ಮಾತ್ರ.", deptCareHeader: "ನಿಮ್ಮ ಮೇಲ್ವಿಚಾರಣೆಯಲ್ಲಿ — {schools} ಶಾಲೆಗಳು, {children} ಮಕ್ಕಳು", deptYourRecord: "ನಿಮ್ಮ ಕಾರ್ಯದ ದಾಖಲೆ", deptOpenQueue: "ತೆರೆದ ಕರ್ತವ್ಯ ಪಟ್ಟಿ",
+};
+
+let activeLanguage: Language = "en";
+
+export function setActiveLanguage(language: Language) {
+  activeLanguage = language;
+}
+
+export function translate(language: Language, key: StringKey, values: Record<string, string | number> = {}): string {
+  const localized = language === "hi" ? hindiStrings[key] : language === "kn" ? kannadaStrings[key] : undefined;
+  return Object.entries(values).reduce<string>((message, [name, value]) => message.replaceAll(`{${name}}`, String(value)), localized ?? englishStrings[key]);
+}
+
+export function isLanguage(value: string | undefined): value is Language {
+  return value === "en" || value === "hi" || value === "kn";
+}
 
 export function t(key: StringKey, values: Record<string, string | number> = {}): string {
-  return Object.entries(values).reduce<string>(
-    (message, [name, value]) => message.replaceAll(`{${name}}`, String(value)),
-    strings[key],
-  );
+  return translate(activeLanguage, key, values);
 }

@@ -24,6 +24,9 @@ export default function ResearchPage() {
         </header>
 
         <div className="mt-12 space-y-14">
+          <p className="max-w-2xl border-l-4 border-ochre pl-5 text-base leading-8 sm:text-lg">
+            {t("researchPersonalOpening")}
+          </p>
           <section aria-labelledby="campaign">
             <h2 id="campaign" className="text-xl font-black tracking-wide text-indigo">{t("researchCampaignTitle")}</h2>
             <div className="mt-4 space-y-4 text-base leading-8 sm:text-lg">

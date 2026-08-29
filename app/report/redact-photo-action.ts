@@ -150,7 +150,10 @@ Use coordinates normalized from 0 to 1000 relative to the full image. Worked exa
         );
       }
 
-      return outputText(await response.json());
+      const responseJson: unknown = await response.json();
+      const rawOutput = outputText(responseJson);
+      console.info("[server redaction diagnosis] raw model JSON", rawOutput);
+      return rawOutput;
     } catch (error) {
       if (error instanceof ServerRedactionError) {
         throw error;
@@ -247,10 +250,30 @@ async function performServerRedaction(formData: FormData) {
     }
   }
 
+  const visionMetadata = await sharp(visionInput).metadata();
+  const sharpInputMetadata = await sharp(input).metadata();
+  console.info("[server redaction diagnosis] coordinate spaces", {
+    modelCoordinateRange: { width: 1000, height: 1000 },
+    modelCoordinateOrigin: "top-left (x increases right, y increases down)",
+    modelImageDimensions: {
+      width: visionMetadata.width,
+      height: visionMetadata.height,
+    },
+    sourceImageDimensionsUsedForConversion: {
+      width: metadata.width,
+      height: metadata.height,
+    },
+    sharpOperatingBufferDimensions: {
+      width: sharpInputMetadata.width,
+      height: sharpInputMetadata.height,
+    },
+    visionBufferWasResized: visionInput !== input,
+  });
+
   const imageDataUrl = `data:image/jpeg;base64,${visionInput.toString("base64")}`;
   const result = await detectFaceBoxes(imageDataUrl, visionInput.length);
   const overlays = await Promise.all(
-    result.faces.map(async (face) => {
+    result.faces.map(async (face, index) => {
       const paddingX = face.width * 0.06;
       const paddingY = face.height * 0.08;
       const left = Math.min(
@@ -275,6 +298,13 @@ async function performServerRedaction(formData: FormData) {
           Math.ceil(((face.height + paddingY * 2) / 1000) * metadata.height),
         ),
       );
+      console.info("[server redaction diagnosis] Sharp face box", {
+        face: index + 1,
+        rawModelBox: face,
+        finalSharpExtract: { left, top, width, height },
+        coordinateConversion: "normalized 0-1000 to source/Sharp buffer pixels",
+        originMatch: "model and Sharp both use top-left",
+      });
       const pixelsWide = Math.max(1, Math.floor(width / 18));
       const pixelsHigh = Math.max(1, Math.floor(height / 18));
       const originalPatch = await sharp(input).extract({ left, top, width, height }).toBuffer();

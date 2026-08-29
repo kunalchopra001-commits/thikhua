@@ -11,6 +11,10 @@ export default function About() {
         </header>
 
         <div className="mt-10 space-y-10">
+        <section aria-labelledby="purpose">
+          <h2 id="purpose" className="text-xl font-black tracking-wide text-indigo">{t("aboutPurpose")}</h2>
+          <p className="mt-3 leading-7">{t("aboutPurposeBody")}</p>
+        </section>
         <section aria-labelledby="works-today">
           <h2 id="works-today" className="text-xl font-black tracking-wide text-indigo">{t("aboutWorksToday")}</h2>
           <p className="mt-3 leading-7">{t("aboutWorksTodayBody")}</p>

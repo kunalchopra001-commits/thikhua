@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BLOCK_CENTROIDS } from "../../data/seed";
+import Link from "next/link";
 import { getOpenIssuesBySchool, getReportsByIssueIds, getSchoolsByBlock } from "../../lib/db";
 import type { Issue, School } from "../../lib/db";
 import { t } from "../../lib/i18n";
@@ -35,22 +35,13 @@ function daysElapsed(createdAt: string) {
   return Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86_400_000));
 }
 
-function nearestBlockId(latitude: number, longitude: number) {
-  return BLOCK_CENTROIDS.reduce((nearest, block) => {
-    const nearestDistance = (nearest.lat - latitude) ** 2 + (nearest.lng - longitude) ** 2;
-    const distance = (block.lat - latitude) ** 2 + (block.lng - longitude) ** 2;
-    return distance < nearestDistance ? block : nearest;
-  }).block_id;
-}
-
 export function ReportFlow() {
   const router = useRouter();
   const { state, updateState } = useReportForm();
-  const { coordinates, setCoordinates, resolvedBlockId, setResolvedBlockId } = useLocation();
+  const { resolvedBlockId } = useLocation();
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
   const [schoolsError, setSchoolsError] = useState(false);
-  const [locationUnavailable, setLocationUnavailable] = useState(false);
   const [existingComplaints, setExistingComplaints] = useState<ExistingComplaint[]>([]);
   const [complaintsLoading, setComplaintsLoading] = useState(false);
   const [recordingError, setRecordingError] = useState<string | null>(null);
@@ -69,19 +60,6 @@ export function ReportFlow() {
   const audioUrl = useObjectUrl(state.audio);
 
   useEffect(() => {
-    if (resolvedBlockId || coordinates) return;
-    if (!("geolocation" in navigator)) { setLocationUnavailable(true); return; }
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setCoordinates({ latitude: coords.latitude, longitude: coords.longitude });
-        setResolvedBlockId(nearestBlockId(coords.latitude, coords.longitude));
-      },
-      () => setLocationUnavailable(true),
-      { enableHighAccuracy: false, maximumAge: 300000, timeout: 8000 },
-    );
-  }, [coordinates, resolvedBlockId, setCoordinates, setResolvedBlockId]);
-
-  useEffect(() => {
     if (!resolvedBlockId) return;
     let cancelled = false;
     setSchoolsLoading(true);
@@ -90,12 +68,12 @@ export function ReportFlow() {
       .then((blockSchools) => {
         if (cancelled) return;
         setSchools(blockSchools);
-        if (state.school && !blockSchools.some((school) => school.id === state.school?.id)) updateState({ school: null });
+        if (state.school && !blockSchools.some((school) => school.id === state.school?.id)) updateState({ school: null, step: 1 });
       })
       .catch(() => { if (!cancelled) setSchoolsError(true); })
       .finally(() => { if (!cancelled) setSchoolsLoading(false); });
     return () => { cancelled = true; };
-  }, [resolvedBlockId, state.school, updateState]);
+  }, [resolvedBlockId, updateState]);
 
   useEffect(() => {
     if (!state.school) { setExistingComplaints([]); return; }
@@ -243,10 +221,10 @@ export function ReportFlow() {
               </section>
               <section aria-labelledby="school-heading">
                 <h2 id="school-heading" className="text-2xl font-bold text-indigo">{t("schoolHeading")}</h2>
-                {!resolvedBlockId && <label className="mt-4 block font-bold text-indigo">{locationUnavailable ? t("chooseBlock") : t("findingSchools")}<select className="mt-2 min-h-12 w-full rounded-lg border-2 border-indigo bg-sand px-3 py-2 text-charcoal" value="" onChange={(event) => setResolvedBlockId(event.target.value)}><option value="" disabled>{t("chooseBlock")}</option>{BLOCK_CENTROIDS.map((block) => <option key={block.block_id} value={block.block_id}>{block.block_name}</option>)}</select></label>}
+                {!resolvedBlockId && <p className="mt-4">{t("findingSchools")}</p>}
                 {schoolsLoading && <p className="mt-4">{t("loadingSchools")}</p>}
                 {schoolsError && <p className="mt-4" role="alert">{t("schoolLoadError")}</p>}
-                {resolvedBlockId && !schoolsLoading && !schoolsError && <label className="mt-4 block font-bold text-indigo" htmlFor="school-select">{t("schoolDropdownLabel")}<select id="school-select" className="mt-2 min-h-12 w-full rounded-lg border-2 border-indigo bg-sand px-3 py-2 text-base text-charcoal" value={state.school?.id ?? ""} onChange={(event) => updateState({ school: schools.find((school) => school.id === event.target.value) ?? null })}><option value="">{t("schoolDropdownPlaceholder")}</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name_en} — {school.name_kn}</option>)}</select></label>}
+                {resolvedBlockId && !schoolsLoading && !schoolsError && <><label className="mt-4 block font-bold text-indigo" htmlFor="school-select">{t("schoolDropdownLabel")}<select id="school-select" className="mt-2 min-h-12 w-full rounded-lg border-2 border-indigo bg-sand px-3 py-2 text-base text-charcoal" value={state.school?.id ?? ""} onChange={(event) => updateState({ school: schools.find((school) => school.id === event.target.value) ?? null })}><option value="">{t("schoolDropdownPlaceholder")}</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name_en} — {school.name_kn}</option>)}</select></label><p className="mt-2 text-sm leading-6 text-charcoal">{t("schoolDataLimitation")} <Link href="/about" className="font-bold text-indigo underline decoration-ochre decoration-2 underline-offset-4">{t("learnMore")}</Link></p></>}
                 {state.school && <div className="mt-5 border-l-4 border-ochre pl-4"><h3 className="font-bold text-indigo">{t("existingComplaintsTitle")}</h3><p className="mt-1 text-sm leading-6">{t("existingComplaintsHelp")}</p>{complaintsLoading && <p className="mt-3 text-sm">{t("existingComplaintsLoading")}</p>}{!complaintsLoading && existingComplaints.length === 0 && <p className="mt-3 text-sm">{t("existingComplaintsNone")}</p>}{!complaintsLoading && existingComplaints.length > 0 && <div className="mt-3 grid gap-3">{existingComplaints.map(({ issue, defect }) => <article key={issue.id} className="rounded-lg border border-stone p-3"><div className="flex items-center justify-between gap-3"><span className="font-mono font-bold text-indigo">{issue.code}</span><span className="rounded-full border-2 border-ochre px-2 py-1 text-xs font-bold">{issue.severity}</span></div><p className="mt-2 text-sm leading-6">{defect}</p><p className="mt-1 text-xs font-semibold">{t("duplicateAge", { days: daysElapsed(issue.created_at) })}</p></article>)}</div>}</div>}
               </section>
             </div>

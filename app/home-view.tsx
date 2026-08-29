@@ -1,18 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BlockCentroid } from "../data/seed";
 import { getIssuesByBlock, getSchoolsByBlock, supabase } from "../lib/db";
 import type { Issue, Report, School, Severity } from "../lib/db";
 import { t } from "../lib/i18n";
-import type { Language } from "../lib/i18n";
-import { LanguageSwitcher } from "./language-switcher";
 import { useLocation } from "./location-context";
 
 type HomeViewProps = {
   blocks: readonly BlockCentroid[];
-  language: Language;
 };
 
 type HomeIssue = Issue & {
@@ -34,75 +31,22 @@ const severityClasses: Record<Severity, string> = {
   S4: "border-ochre bg-sand",
 };
 
-function nearestBlock(blocks: readonly BlockCentroid[], latitude: number, longitude: number) {
-  return blocks.reduce((nearest, block) => {
-    const nearestDistance =
-      (nearest.lat - latitude) ** 2 + (nearest.lng - longitude) ** 2;
-    const blockDistance = (block.lat - latitude) ** 2 + (block.lng - longitude) ** 2;
-    return blockDistance < nearestDistance ? block : nearest;
-  });
-}
-
 function daysElapsed(createdAt: string): number {
   const elapsed = Date.now() - new Date(createdAt).getTime();
   return Math.max(0, Math.floor(elapsed / (24 * 60 * 60 * 1000)));
 }
 
-export function HomeView({ blocks, language }: HomeViewProps) {
-  const { setCoordinates, setResolvedBlockId } = useLocation();
-  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
+export function HomeView({ blocks }: HomeViewProps) {
+  const { resolvedBlockId } = useLocation();
   const [schools, setSchools] = useState<School[]>([]);
   const [issues, setIssues] = useState<HomeIssue[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
-  const manuallySelected = useRef(false);
-
   useEffect(() => {
-    let settled = false;
-    const timeout = window.setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        setShowPicker(true);
-      }
-    }, 8000);
-
-    if (!("geolocation" in navigator)) {
-      window.clearTimeout(timeout);
-      setShowPicker(true);
+    if (!resolvedBlockId) {
       return;
     }
-
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        if (settled || manuallySelected.current) {
-          return;
-        }
-
-        settled = true;
-        window.clearTimeout(timeout);
-        setCoordinates({ latitude: coords.latitude, longitude: coords.longitude });
-        const blockId = nearestBlock(blocks, coords.latitude, coords.longitude).block_id;
-        setSelectedBlockId(blockId);
-        setResolvedBlockId(blockId);
-      },
-      () => {
-        if (!settled) {
-          settled = true;
-          window.clearTimeout(timeout);
-          setShowPicker(true);
-        }
-      },
-      { enableHighAccuracy: false, maximumAge: 300000, timeout: 8000 },
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [blocks, setCoordinates, setResolvedBlockId]);
-
-  useEffect(() => {
-    if (!selectedBlockId) {
-      return;
-    }
+    const blockId = resolvedBlockId;
 
     let cancelled = false;
     setIsLoading(true);
@@ -111,8 +55,8 @@ export function HomeView({ blocks, language }: HomeViewProps) {
     async function loadBlock() {
       try {
         const [blockSchools, blockIssues] = await Promise.all([
-          getSchoolsByBlock(selectedBlockId as string),
-          getIssuesByBlock(selectedBlockId as string),
+          getSchoolsByBlock(blockId),
+          getIssuesByBlock(blockId),
         ]);
         const openIssues = blockIssues.filter((issue) => issue.status !== "resolved");
         let reports: Report[] = [];
@@ -178,9 +122,9 @@ export function HomeView({ blocks, language }: HomeViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [selectedBlockId]);
+  }, [resolvedBlockId]);
 
-  const selectedBlock = blocks.find((block) => block.block_id === selectedBlockId) ?? null;
+  const selectedBlock = blocks.find((block) => block.block_id === resolvedBlockId) ?? null;
   const totalEnrolment = schools.reduce((total, school) => total + school.enrolment, 0);
   const severityCounts = useMemo(
     () =>
@@ -193,55 +137,8 @@ export function HomeView({ blocks, language }: HomeViewProps) {
     [issues],
   );
 
-  function selectBlock(blockId: string) {
-    manuallySelected.current = true;
-    setSelectedBlockId(blockId);
-    setResolvedBlockId(blockId);
-    setShowPicker(true);
-  }
-
   return (
     <main data-home-page className="min-h-[calc(100vh-8rem)] bg-sand text-charcoal">
-      <section aria-label={t("locationBarLabel")} className="border-b border-stone bg-sand px-4 py-2.5 sm:px-6">
-        <div className="mx-auto flex max-w-5xl items-center gap-2">
-          <div className="min-w-0 flex-1">
-            {selectedBlock ? (
-              <p className="truncate text-sm font-bold text-indigo sm:text-base">
-                {t("youAreIn", { block: selectedBlock.block_name, district: selectedBlock.district })}
-              </p>
-            ) : (
-              <p className="text-sm font-bold text-indigo">{showPicker ? t("chooseBlock") : t("locating")}</p>
-            )}
-          </div>
-
-          {selectedBlock && !showPicker ? (
-            <button
-              type="button"
-              onClick={() => setShowPicker(true)}
-              className="min-h-10 shrink-0 rounded-lg px-2 text-xs font-bold text-indigo underline decoration-ochre decoration-2 underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
-            >
-              {t("changeBlockShort")}
-            </button>
-          ) : (
-            <label className="min-w-0 flex-1">
-              <span className="sr-only">{t("chooseBlock")}</span>
-              <select
-                className="min-h-10 w-full rounded-lg border border-indigo bg-sand px-2 py-1.5 text-sm font-bold text-charcoal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
-                value={selectedBlockId ?? ""}
-                onChange={(event) => selectBlock(event.target.value)}
-              >
-                <option value="" disabled>{t("chooseBlock")}</option>
-                {blocks.map((block) => (
-                  <option key={block.block_id} value={block.block_id}>{block.block_name}</option>
-                ))}
-              </select>
-            </label>
-          )}
-
-          <LanguageSwitcher language={language} />
-        </div>
-      </section>
-
       <div className="mx-auto max-w-5xl px-4 pb-16 pt-7 sm:px-6 sm:pb-20 sm:pt-12">
         <section aria-labelledby="welcome-heading" className="max-w-3xl py-2 sm:py-4">
           <h1 id="welcome-heading" className="max-w-3xl text-3xl font-black leading-[1.18] tracking-tight text-indigo sm:text-5xl sm:leading-[1.15]">

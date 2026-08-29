@@ -3,12 +3,12 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Noto_Sans_Devanagari, Noto_Sans_Kannada } from "next/font/google";
 import type { ReactNode } from "react";
+import { BLOCK_CENTROIDS } from "../data/seed";
 import { isLanguage, setActiveLanguage, t } from "../lib/i18n";
 import "./globals.css";
 import { PrototypeBanner } from "./prototype-banner";
 import { LocationProvider } from "./location-context";
-import { WorkInProgressPanel } from "./work-in-progress-panel";
-import { LanguageSwitcher } from "./language-switcher";
+import { LocationBar } from "./location-bar";
 
 const devanagariFont = Noto_Sans_Devanagari({
   weight: "400",
@@ -43,15 +43,19 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Link href="/" className="shrink-0 text-lg font-bold tracking-tight sm:text-xl">
               {t("siteName")}
             </Link>
-            <div className="global-language-switcher">
-              <LanguageSwitcher language={language} />
-            </div>
             <nav className="flex w-full items-center justify-between gap-1 sm:ml-auto sm:w-auto sm:justify-start sm:gap-2">
               <Link
-                href="/about"
+                href="/report"
+                className="flex min-h-11 items-center rounded-lg bg-rani px-3 py-2 text-sm font-black text-sand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+              >
+                {t("startReport")}
+              </Link>
+              <Link
+                href="/track"
                 className="flex min-h-11 items-center px-2 py-2 text-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
               >
-                {t("aboutNav")}
+                <span className="sm:hidden">{t("trackIssueShort")}</span>
+                <span className="hidden sm:inline">{t("trackIssue")}</span>
               </Link>
               <Link
                 href="/research"
@@ -60,24 +64,19 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                 {t("researchNav")}
               </Link>
               <Link
-                href="/track"
-                className="flex min-h-11 items-center rounded border border-sand px-3 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+                href="/about"
+                className="flex min-h-11 items-center px-2 py-2 text-sm font-bold underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
               >
-                <span className="sm:hidden">{t("trackIssueShort")}</span>
-                <span className="hidden sm:inline">{t("trackIssue")}</span>
-              </Link>
-              <WorkInProgressPanel />
-              <Link
-                href="/report"
-                className="global-report-link flex min-h-11 items-center rounded-lg border border-sand px-3 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
-              >
-                {t("startReport")}
+                {t("aboutNav")}
               </Link>
             </nav>
           </div>
         </header>
-        <PrototypeBanner />
-        <LocationProvider>{children}</LocationProvider>
+        <LocationProvider>
+          <LocationBar blocks={BLOCK_CENTROIDS} language={language} />
+          <PrototypeBanner />
+          {children}
+        </LocationProvider>
         <footer className="border-t border-stone bg-sand px-4 py-5 text-center text-xs text-charcoal">{t("prototypeFooter")}</footer>
       </body>
     </html>

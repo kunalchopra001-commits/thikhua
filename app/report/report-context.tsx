@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useState } from "react
 import type { ReactNode } from "react";
 import type { CaptureProvenance, School } from "../../lib/db";
 
-export type ReportStep = 1 | 2 | 3 | 4;
+export type ReportStep = 1 | 2;
 export type PhotoFailureReason =
   | "decode_failed"
   | "mediapipe_unavailable"

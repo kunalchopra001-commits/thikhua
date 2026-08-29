@@ -43,7 +43,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <Link href="/" className="shrink-0 text-lg font-bold tracking-tight sm:text-xl">
               {t("siteName")}
             </Link>
-            <LanguageSwitcher language={language} />
+            <div className="global-language-switcher">
+              <LanguageSwitcher language={language} />
+            </div>
             <nav className="flex w-full items-center justify-between gap-1 sm:ml-auto sm:w-auto sm:justify-start sm:gap-2">
               <Link
                 href="/about"
@@ -67,7 +69,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               <WorkInProgressPanel />
               <Link
                 href="/report"
-                className="flex min-h-11 items-center rounded border-2 border-rani bg-sand px-3 py-2 text-sm font-bold text-charcoal ring-2 ring-inset ring-rani focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
+                className="global-report-link flex min-h-11 items-center rounded-lg border border-sand px-3 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sand"
               >
                 {t("startReport")}
               </Link>

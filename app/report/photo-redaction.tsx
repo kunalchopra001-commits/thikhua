@@ -242,14 +242,9 @@ export function PhotoRedaction() {
         <PhotoInput label={t("addPhotos")} multiple outline onFiles={(files) => files.slice(0, MAX_DEFECT_PHOTOS - state.photos.length).forEach((item) => void processPhoto(item, "upload", "defect"))} />
       </div>}
       <p className="mt-4 border-l-4 border-indigo bg-indigo/10 p-3 text-sm font-semibold">{t("redactionExplanation")}</p>
-      <div className="mt-8 border-t-2 border-stone pt-6">
-        <h3 className="text-lg font-bold text-indigo">{t("signboardHeading")}</h3>
-        <p className="mt-2 text-sm leading-6">{t("signboardHelp")}</p>
-        {state.signboardPhoto ? <div className="mt-4 max-w-44"><PhotoThumbnail photo={state.signboardPhoto} preview={previews[state.signboardPhoto.id] ?? null} onRemove={() => removePhoto(state.signboardPhoto!.id, "signboard")} /></div> : <div className="mt-4"><PhotoInput label={t("takeSignboardPhoto")} capture outline onFiles={(files) => { if (files[0]) void processPhoto(files[0], "live", "signboard"); }} /></div>}
-      </div>
     </section>
   );
-  if (state.step !== 4) return null;
+  if (state.step !== 2) return null;
   const totalFaces =
     state.photos.reduce((total, photo) => total + photo.facesHidden, 0) +
     (state.signboardPhoto?.facesHidden ?? 0);
@@ -258,7 +253,6 @@ export function PhotoRedaction() {
       <div className="flex items-center justify-between gap-4"><h2 id="review-photo-heading" className="text-lg font-bold text-indigo">{t("summaryPhotos")}</h2><button type="button" className="min-h-11 rounded border-2 border-indigo px-3 py-2 text-sm font-bold" onClick={() => updateState({ step: 1 })}>{t("editPhoto")}</button></div>
       <p className="mt-2 font-bold">{totalFaces === 0 ? t("noFacesFound") : t("totalFacesHidden", { count: totalFaces })}</p>
       <div className="mt-4 grid gap-5 sm:grid-cols-2">{state.photos.map((photo) => <ReviewPhoto key={photo.id} photo={photo} original={previews[photo.id] ?? null} source={sourcesRef.current.get(photo.id)} onConfirm={(blob, count) => manualConfirmed(photo, blob, count, "defect")} />)}</div>
-      {state.signboardPhoto && <div className="mt-6 border-t-2 border-stone pt-5"><h3 className="font-bold text-indigo">{t("signboardHeading")}</h3><div className="mt-3 max-w-sm"><ReviewPhoto photo={state.signboardPhoto} original={previews[state.signboardPhoto.id] ?? null} source={sourcesRef.current.get(state.signboardPhoto.id)} onConfirm={(blob, count) => manualConfirmed(state.signboardPhoto!, blob, count, "signboard")} /></div></div>}
     </section>
   );
 }

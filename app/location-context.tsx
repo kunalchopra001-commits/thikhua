@@ -11,13 +11,19 @@ export type Coordinates = {
 type LocationContextValue = {
   coordinates: Coordinates | null;
   setCoordinates: (coordinates: Coordinates) => void;
+  resolvedBlockId: string | null;
+  setResolvedBlockId: (blockId: string) => void;
 };
 
 const LocationContext = createContext<LocationContextValue | null>(null);
 
 export function LocationProvider({ children }: { children: ReactNode }) {
   const [coordinates, setCoordinates] = useState<Coordinates | null>(null);
-  const value = useMemo(() => ({ coordinates, setCoordinates }), [coordinates]);
+  const [resolvedBlockId, setResolvedBlockId] = useState<string | null>(null);
+  const value = useMemo(
+    () => ({ coordinates, setCoordinates, resolvedBlockId, setResolvedBlockId }),
+    [coordinates, resolvedBlockId],
+  );
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
 }

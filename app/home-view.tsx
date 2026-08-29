@@ -6,10 +6,13 @@ import type { BlockCentroid } from "../data/seed";
 import { getIssuesByBlock, getSchoolsByBlock, supabase } from "../lib/db";
 import type { Issue, Report, School, Severity } from "../lib/db";
 import { t } from "../lib/i18n";
+import type { Language } from "../lib/i18n";
+import { LanguageSwitcher } from "./language-switcher";
 import { useLocation } from "./location-context";
 
 type HomeViewProps = {
   blocks: readonly BlockCentroid[];
+  language: Language;
 };
 
 type HomeIssue = Issue & {
@@ -45,8 +48,8 @@ function daysElapsed(createdAt: string): number {
   return Math.max(0, Math.floor(elapsed / (24 * 60 * 60 * 1000)));
 }
 
-export function HomeView({ blocks }: HomeViewProps) {
-  const { setCoordinates } = useLocation();
+export function HomeView({ blocks, language }: HomeViewProps) {
+  const { setCoordinates, setResolvedBlockId } = useLocation();
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [schools, setSchools] = useState<School[]>([]);
@@ -79,7 +82,9 @@ export function HomeView({ blocks }: HomeViewProps) {
         settled = true;
         window.clearTimeout(timeout);
         setCoordinates({ latitude: coords.latitude, longitude: coords.longitude });
-        setSelectedBlockId(nearestBlock(blocks, coords.latitude, coords.longitude).block_id);
+        const blockId = nearestBlock(blocks, coords.latitude, coords.longitude).block_id;
+        setSelectedBlockId(blockId);
+        setResolvedBlockId(blockId);
       },
       () => {
         if (!settled) {
@@ -92,7 +97,7 @@ export function HomeView({ blocks }: HomeViewProps) {
     );
 
     return () => window.clearTimeout(timeout);
-  }, [blocks, setCoordinates]);
+  }, [blocks, setCoordinates, setResolvedBlockId]);
 
   useEffect(() => {
     if (!selectedBlockId) {
@@ -191,94 +196,102 @@ export function HomeView({ blocks }: HomeViewProps) {
   function selectBlock(blockId: string) {
     manuallySelected.current = true;
     setSelectedBlockId(blockId);
+    setResolvedBlockId(blockId);
     setShowPicker(true);
   }
 
   return (
-    <main className="min-h-[calc(100vh-8rem)] bg-sand px-4 py-8 text-charcoal sm:px-6 sm:py-12">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+    <main data-home-page className="min-h-[calc(100vh-8rem)] bg-sand text-charcoal">
+      <section aria-label={t("locationBarLabel")} className="border-b border-stone bg-sand px-4 py-2.5 sm:px-6">
+        <div className="mx-auto flex max-w-5xl items-center gap-2">
+          <div className="min-w-0 flex-1">
             {selectedBlock ? (
-              <>
-                <h1 className="text-3xl font-bold tracking-tight text-indigo sm:text-4xl">
-                  {selectedBlock.block_name}
-                </h1>
-                <p className="mt-2 text-base">
-                  {t("schoolsAndEnrollment", {
-                    schools: schools.length,
-                    enrolment: totalEnrolment.toLocaleString("en-IN"),
-                  })}
-                </p>
-              </>
-            ) : (
-              <p className="text-lg font-semibold text-indigo">
-                {showPicker ? t("chooseBlock") : t("locating")}
+              <p className="truncate text-sm font-bold text-indigo sm:text-base">
+                {t("youAreIn", { block: selectedBlock.block_name, district: selectedBlock.district })}
               </p>
+            ) : (
+              <p className="text-sm font-bold text-indigo">{showPicker ? t("chooseBlock") : t("locating")}</p>
             )}
           </div>
 
-          <label className="flex w-full flex-col gap-1 text-sm font-semibold sm:w-64">
-            <span>{selectedBlock ? t("changeBlock") : t("chooseBlock")}</span>
-            <select
-              className="min-h-11 rounded border-2 border-indigo bg-sand px-3 py-2 text-base text-charcoal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
-              value={selectedBlockId ?? ""}
-              onChange={(event) => selectBlock(event.target.value)}
+          {selectedBlock && !showPicker ? (
+            <button
+              type="button"
+              onClick={() => setShowPicker(true)}
+              className="min-h-10 shrink-0 rounded-lg px-2 text-xs font-bold text-indigo underline decoration-ochre decoration-2 underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
             >
-              <option value="" disabled>
-                {t("chooseBlock")}
-              </option>
-              {blocks.map((block) => (
-                <option key={block.block_id} value={block.block_id}>
-                  {block.block_name}
-                </option>
-              ))}
-            </select>
-          </label>
+              {t("changeBlockShort")}
+            </button>
+          ) : (
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">{t("chooseBlock")}</span>
+              <select
+                className="min-h-10 w-full rounded-lg border border-indigo bg-sand px-2 py-1.5 text-sm font-bold text-charcoal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
+                value={selectedBlockId ?? ""}
+                onChange={(event) => selectBlock(event.target.value)}
+              >
+                <option value="" disabled>{t("chooseBlock")}</option>
+                {blocks.map((block) => (
+                  <option key={block.block_id} value={block.block_id}>{block.block_name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <LanguageSwitcher language={language} />
         </div>
+      </section>
+
+      <div className="mx-auto max-w-5xl px-4 pb-16 pt-7 sm:px-6 sm:pb-20 sm:pt-12">
+        <section aria-labelledby="welcome-heading" className="max-w-3xl py-2 sm:py-4">
+          <h1 id="welcome-heading" className="max-w-3xl text-3xl font-black leading-[1.18] tracking-tight text-indigo sm:text-5xl sm:leading-[1.15]">
+            {t("homeWelcomeTitle")}
+          </h1>
+          <div className="mt-6 max-w-2xl space-y-4 text-base leading-8 sm:mt-8 sm:text-lg sm:leading-9">
+            <p>{t("homeWelcomeBodyOne")}</p>
+            <p>{t("homeWelcomeBodyTwo")}</p>
+            <p>{t("homeWelcomeBodyThree")}</p>
+          </div>
+          <p className="mt-9 text-xl font-bold text-indigo sm:mt-12 sm:text-2xl">{t("homeWelcomeSignoff")}</p>
+        </section>
+
+        <Link
+          href="/report"
+          className="mt-9 flex min-h-14 w-full max-w-md items-center justify-center rounded-lg bg-rani px-6 py-4 text-center text-lg font-black text-sand shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rani sm:mt-12 sm:text-xl"
+        >
+          {t("homePrimaryAction")}
+        </Link>
 
         {selectedBlock && (
-          <>
-            <section aria-labelledby="severity-summary" className="mb-10">
-              <h2 id="severity-summary" className="mb-3 text-sm font-bold uppercase tracking-wider text-indigo">
-                {t("severitySummary")}
-              </h2>
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                {(Object.keys(severityCounts) as Severity[]).map((severity) => (
-                  <span
-                    key={severity}
-                    className={`rounded-full border-2 px-3 py-2 text-center text-sm font-bold ${severityClasses[severity]}`}
-                  >
-                    {t("severityCount", { severity, count: severityCounts[severity] })}
-                  </span>
-                ))}
+          <section aria-labelledby="open-issues" className="mt-16 border-t-2 border-indigo pt-7 sm:mt-24 sm:pt-9">
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-widest text-terracotta">{t("localLedger")}</p>
+                  <h2 id="open-issues" className="mt-2 text-2xl font-black leading-tight text-indigo sm:text-3xl">
+                    {t("ledgerSummary", { schools: schools.length, issues: issues.length })}
+                  </h2>
+                  <p className="mt-2 text-sm">{t("enrolmentInBlock", { enrolment: totalEnrolment.toLocaleString("en-IN") })}</p>
+                </div>
+                <div aria-label={t("severitySummary")} className="flex flex-wrap gap-2">
+                  {(Object.keys(severityCounts) as Severity[]).map((severity) => (
+                    <span key={severity} className={`rounded-full border-2 px-3 py-1.5 text-sm font-bold ${severityClasses[severity]}`}>
+                      {t("severityCount", { severity, count: severityCounts[severity] })}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </section>
 
-            <div className="mb-8 flex flex-col gap-4 rounded border-2 border-rani bg-rani/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="font-bold">{t("homeReportPrompt")}</p>
-              <Link
-                href="/report"
-                className="flex min-h-12 shrink-0 items-center justify-center rounded border-2 border-rani bg-sand px-5 py-3 font-bold text-charcoal ring-2 ring-inset ring-rani focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
-              >
-                {t("startReport")}
-              </Link>
-            </div>
-
-            <section aria-labelledby="open-issues">
-              <h2 id="open-issues" className="mb-4 text-2xl font-bold text-indigo">
-                {t("openIssues")}
-              </h2>
+              <div className="mt-7 sm:mt-9">
 
               {isLoading && <p>{t("loadingIssues")}</p>}
               {hasError && <p role="alert">{t("loadError")}</p>}
 
               {!isLoading && !hasError && issues.length === 0 && (
-                <div className="rounded border-2 border-dashed border-ochre bg-ochre/10 p-8 text-center">
+                <div className="rounded-lg border-2 border-dashed border-ochre bg-ochre/10 p-8 text-center">
                   <p className="text-lg font-semibold">{t("emptyBlock")}</p>
                   <Link
                     href="/report"
-                    className="mt-5 inline-flex min-h-11 items-center rounded bg-indigo px-5 py-3 font-bold text-sand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo"
+                    className="mt-5 inline-flex min-h-11 items-center rounded-lg border-2 border-rani px-5 py-3 font-bold text-charcoal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rani"
                   >
                     {t("reportIssue")}
                   </Link>
@@ -295,7 +308,7 @@ export function HomeView({ blocks }: HomeViewProps) {
                         key={issue.id}
                         href={`/issue/${issue.code}`}
                         aria-label={t("viewIssue", { school: issue.schoolName })}
-                        className={`group rounded border-2 bg-sand p-5 text-charcoal transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo motion-reduce:transition-none ${
+                        className={`group rounded-lg border-2 bg-sand p-5 text-charcoal transition-shadow hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo motion-reduce:transition-none ${
                           isUnfunded ? "border-rani ring-2 ring-inset ring-rani" : "border-stone"
                         }`}
                       >
@@ -329,8 +342,8 @@ export function HomeView({ blocks }: HomeViewProps) {
                   })}
                 </div>
               )}
+              </div>
             </section>
-          </>
         )}
       </div>
     </main>

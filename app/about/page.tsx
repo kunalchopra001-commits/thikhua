@@ -18,6 +18,14 @@ export default function About() {
         <section aria-labelledby="works-today">
           <h2 id="works-today" className="text-xl font-black tracking-wide text-indigo">{t("aboutWorksToday")}</h2>
           <p className="mt-3 leading-7">{t("aboutWorksTodayBody")}</p>
+          <p className="mt-3 leading-7">
+            <a
+              href="https://github.com/kunalchopra001-commits/thikhua/blob/main/supabase/migration.sql"
+              className="font-bold text-indigo underline decoration-ochre decoration-2 underline-offset-4"
+            >
+              {t("aboutMigrationLink")}
+            </a>
+          </p>
         </section>
         <section aria-labelledby="simulated">
           <h2 id="simulated" className="text-xl font-black tracking-wide text-indigo">{t("aboutMocked")}</h2>
@@ -33,6 +41,7 @@ export default function About() {
             <li>{t("aboutLimitationSignboard")}</li>
             <li>{t("aboutLimitationRls")}</li>
             <li>{t("aboutLimitationFaces")}</li>
+            <li>{t("aboutLimitationJurisdiction")}</li>
           </ul>
         </section>
         <section aria-labelledby="at-scale">
